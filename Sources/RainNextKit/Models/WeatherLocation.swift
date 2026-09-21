@@ -24,6 +24,12 @@ public struct WeatherLocation: Identifiable, Hashable, Codable, Sendable {
 
     public var isCurrentLocation: Bool { source == .current }
 
+    /// Two searches for the same town produce different ids but the same place.
+    /// A tenth of a degree is far coarser than the feed resolves anyway.
+    public func isSamePlace(as other: WeatherLocation) -> Bool {
+        abs(latitude - other.latitude) < 0.1 && abs(longitude - other.longitude) < 0.1
+    }
+
     /// Stable id so "current location" stays the same selection across launches
     /// even as its coordinates move with the user.
     public static let currentLocationID = UUID(uuidString: "00000000-0000-0000-0000-00000000C0DE")!

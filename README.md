@@ -40,8 +40,10 @@ Sources/
 │   │   └── WeatherLocation
 │   └── Services/
 │       ├── BuienradarForecastParser   JSON feed → [RainReading]
+│       ├── BuienradarCoverage         where the radar composite has data
 │       ├── RainService       RainDataSource protocol + Buienradar impl
 │       ├── PayloadLogger     keeps wet payloads for threshold calibration
+│       ├── PlaceSearchService  CLGeocoder, filtered to coverage
 │       ├── LocationService   CoreLocation, reduced accuracy
 │       └── LocationStore     remembers the selection
 └── RainNext/           SwiftUI app
@@ -78,6 +80,22 @@ floor gates *predictions* only — a rate that is falling right now is still sho
 These are estimates. `PayloadLogger` writes every wet response to
 `~/Library/Application Support/RainNext/payloads` (local only, capped at 500
 files) so they can eventually be measured instead — BD-108.
+
+## Locations
+
+Current location (CoreLocation, reduced accuracy), plus a saved list that is
+searched with `CLGeocoder` — no extra dependency, no API key. The list is
+seeded once with five Dutch cities so the first launch is useful even if
+location permission is denied, and is fully editable after that: drag to
+reorder, context menu to remove, capped at 12.
+
+Buienradar's radar composite covers **lat 49.51–54.80, lon 0.00–10.00** and
+answers 404 outside it, so "no coverage" can never masquerade as "dry". Those
+bounds were measured against the live endpoint rather than documented, and are
+used only to keep obviously-elsewhere search results out of the list; the feed
+itself remains the authority. If CoreLocation puts you outside the box, the app
+keeps the location you had instead of replacing a working forecast with a
+permanent error.
 
 ## Refresh
 
@@ -125,7 +143,7 @@ Not a fork of RainBar — own codebase, own implementation.
 
 ## Still open (BD-105)
 
-- notification before rain starts — not built
-- custom / favourite locations beyond the presets
-- rain episode thresholds, currently 0.1 / 0.5 / 2.0 mm/h
+- notification before rain starts — not built (BD-106)
+- threshold calibration against real readings (BD-108)
+- Buienradar attribution wording (BD-109)
 - radar imagery is intentionally excluded from v1

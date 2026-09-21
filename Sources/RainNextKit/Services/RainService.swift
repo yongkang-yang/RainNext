@@ -10,6 +10,7 @@ public enum RainServiceError: LocalizedError, Equatable {
     case badResponse(Int)
     case emptyPayload
     case malformedPayload
+    case outsideCoverage
 
     public var errorDescription: String? {
         switch self {
@@ -17,6 +18,7 @@ public enum RainServiceError: LocalizedError, Equatable {
         case .badResponse(let code): return "Buienradar returned status \(code)."
         case .emptyPayload: return "Buienradar returned no readings."
         case .malformedPayload: return "Could not read Buienradar's response."
+        case .outsideCoverage: return "Buienradar only covers \(BuienradarCoverage.description)."
         }
     }
 }
@@ -47,7 +49,9 @@ public struct BuienradarRainService: RainDataSource {
 
         let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw RainServiceError.badResponse(http.statusCode)
+            // The feed answers 404 for coordinates off the radar composite.
+            throw http.statusCode == 404 ? RainServiceError.outsideCoverage
+                                         : RainServiceError.badResponse(http.statusCode)
         }
 
         let readings: [RainReading]

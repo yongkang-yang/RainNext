@@ -12,8 +12,12 @@ final class AppState: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var now = Date()
     @Published private(set) var selectedLocation: WeatherLocation
+    @Published private(set) var favourites: [WeatherLocation]
+    /// Set when CoreLocation puts the user somewhere Buienradar cannot see.
+    @Published private(set) var currentLocationIsCovered = true
 
     let locationService = LocationService()
+    let placeSearch = PlaceSearchService()
 
     private let rainService: RainDataSource
     private let store = LocationStore()
@@ -32,6 +36,7 @@ final class AppState: ObservableObject {
         let saved = store.selected
         self.selectedLocation = saved ?? .fallback
         self.prefersCurrentLocation = saved?.isCurrentLocation ?? true
+        self.favourites = store.seedIfNeeded()
 
         locationService.$currentLocation
             .compactMap { $0 }
@@ -50,6 +55,39 @@ final class AppState: ObservableObject {
 
     var status: RainStatus { forecast?.status(at: now) ?? .unavailable }
     var menuBarState: MenuBarState { MenuBarState.make(from: status, at: now) }
+
+    var canAddFavourite: Bool { favourites.count < LocationStore.favouritesLimit }
+
+    func isSaved(_ location: WeatherLocation) -> Bool {
+        favourites.contains { $0.id == location.id || $0.isSamePlace(as: location) }
+    }
+
+    func addFavourite(_ location: WeatherLocation) {
+        guard canAddFavourite, !isSaved(location) else {
+            select(location)
+            return
+        }
+        favourites.append(location)
+        store.favourites = favourites
+        select(location)
+    }
+
+    func removeFavourites(at offsets: IndexSet) {
+        let removed = offsets.map { favourites[$0] }
+        favourites.remove(atOffsets: offsets)
+        store.favourites = favourites
+
+        // Dropping the place you were looking at should land somewhere sensible
+        // rather than leaving a stale name in the header.
+        if removed.contains(where: { $0.id == selectedLocation.id }) {
+            select(locationService.currentLocation ?? favourites.first ?? .fallback)
+        }
+    }
+
+    func moveFavourites(from source: IndexSet, to destination: Int) {
+        favourites.move(fromOffsets: source, toOffset: destination)
+        store.favourites = favourites
+    }
 
     func select(_ location: WeatherLocation) {
         prefersCurrentLocation = location.isCurrentLocation
@@ -92,6 +130,10 @@ final class AppState: ObservableObject {
     }
 
     private func currentLocationChanged(to location: WeatherLocation) {
+        currentLocationIsCovered = BuienradarCoverage.contains(location)
+        // Following the user to a place the radar cannot see would replace a
+        // working forecast with a permanent error. Stay put instead.
+        guard currentLocationIsCovered else { return }
         guard prefersCurrentLocation else { return }
         let moved = abs(location.latitude - selectedLocation.latitude) > 0.01
             || abs(location.longitude - selectedLocation.longitude) > 0.01
