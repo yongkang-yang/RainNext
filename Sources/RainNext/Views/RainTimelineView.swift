@@ -42,16 +42,27 @@ struct RainTimelineView: View {
 
     private var chart: some View {
         GeometryReader { geometry in
-            ZStack(alignment: .topLeading) {
+            ZStack {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(Color.primary.opacity(0.05))
 
+                // Rain grows up from the floor, so the bars hang off the
+                // bottom edge — not off the top, which is where a topLeading
+                // ZStack quietly puts them.
                 HStack(alignment: .bottom, spacing: 1.5) {
                     ForEach(readings) { reading in
                         bar(for: reading, isPast: reading.timestamp < now)
                     }
                 }
                 .padding(.horizontal, 2)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+
+                // A floor line, so an all-dry window reads as "measured, and
+                // dry" rather than as a chart that failed to load.
+                Rectangle()
+                    .fill(Color.primary.opacity(0.12))
+                    .frame(height: 1)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
 
                 nowMarker(in: geometry.size)
             }
@@ -66,7 +77,7 @@ struct RainTimelineView: View {
 
         return RoundedRectangle(cornerRadius: 1.5)
             .fill(color(for: reading.intensity).opacity(opacity))
-            .frame(height: max(reading.isRaining ? 3 : 1, chartHeight * fraction))
+            .frame(height: max(reading.isRaining ? 3 : 2, chartHeight * fraction))
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
             .onHover { inside in
@@ -88,8 +99,9 @@ struct RainTimelineView: View {
         if let fraction = nowFraction {
             Rectangle()
                 .fill(Color.primary.opacity(0.55))
-                .frame(width: 1, height: size.height)
-                .offset(x: size.width * fraction)
+                .frame(width: 1)
+                .frame(maxHeight: .infinity)
+                .position(x: size.width * fraction, y: size.height / 2)
         }
     }
 
