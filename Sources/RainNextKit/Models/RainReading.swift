@@ -4,8 +4,17 @@ import Foundation
 /// One precipitation sample at a point in time.
 ///
 /// Buienradar's JSON feed gives mm/h directly, so that is what this stores.
-/// `rawValue` is its undocumented 0...255 radar number, kept only because
-/// threshold calibration needs it (BD-108).
+///
+/// `rawValue` is the feed's `original` field, which is also its `value` field —
+/// they are always identical. Measured against live data it is simply
+/// `mm/h × 20`, on the same 0...100 scale as the feed's own `licht`/`matig`/
+/// `zwaar` bands. It is kept because it is finer-grained than `precipitation`,
+/// which arrives rounded to one decimal, and threshold calibration wants that
+/// resolution (BD-108).
+///
+/// `precipitation` stays the source of truth even so: it is the provider's own
+/// number, whereas the ×20 relation is measured over a narrow range of light
+/// rain and should not be extrapolated to a downpour.
 public struct RainReading: Identifiable, Hashable, Sendable {
     public let timestamp: Date
     public let millimetersPerHour: Double
@@ -15,22 +24,6 @@ public struct RainReading: Identifiable, Hashable, Sendable {
         self.timestamp = timestamp
         self.millimetersPerHour = max(0, millimetersPerHour)
         self.rawValue = rawValue
-    }
-
-    /// Derives mm/h from the raw radar value instead of taking it from the feed.
-    public init(timestamp: Date, rawValue: Int) {
-        self.init(
-            timestamp: timestamp,
-            millimetersPerHour: Self.millimetersPerHour(fromRawValue: rawValue),
-            rawValue: rawValue
-        )
-    }
-
-    /// Buienradar's documented conversion. Raw 0 means nothing at all, not
-    /// "10^(-109/32) mm/h".
-    public static func millimetersPerHour(fromRawValue value: Int) -> Double {
-        guard value > 0 else { return 0 }
-        return pow(10.0, (Double(value) - 109.0) / 32.0)
     }
 
     public var id: Date { timestamp }

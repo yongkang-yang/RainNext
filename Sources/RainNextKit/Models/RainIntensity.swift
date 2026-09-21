@@ -12,8 +12,9 @@ import Foundation
 /// These are still estimates, not measurements — see BD-108. `PayloadLogger`
 /// collects the raw data to replace them with.
 public enum RainThresholds {
-    /// Below this a sample counts as dry. Buienradar's own raw 77 is 0.1 mm/h,
-    /// and its raw 0 is an explicit "nothing".
+    /// Below this a sample counts as dry. 0.1 mm/h is the smallest rate the
+    /// feed reports at all — it quantises to 0.05 steps and rounds what it
+    /// publishes to one decimal.
     public static let episodeFloor: Double = 0.1
 
     /// An episode whose peak stays under this never reaches the menu bar.
