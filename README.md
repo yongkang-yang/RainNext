@@ -124,6 +124,23 @@ Fetch on launch, every 5 minutes after that, and again when the popover opens
 (if the data is more than 60s old). A failed refresh keeps the last valid
 forecast on screen.
 
+## Icon
+
+`Resources/AppIcon.png` is the master art; `Scripts/make-icon.py` turns it into
+`Resources/AppIcon.icns`, which `bundle.sh` regenerates only when the master is
+newer.
+
+The script rebuilds the art **full-bleed** rather than passing it through. From
+macOS 26 on, the system draws every app icon inside a container shape of its
+own, so art that bakes in its own rounded square renders as a squircle nested
+in a squircle, on a grey plate where the transparent margins were. The script
+lifts the glyph off its background, reproduces the background gradient across
+the whole canvas at 1024, and leaves the corners to the system — which is how
+the icon ends up looking like the ones next to it.
+
+The glyph is a seal-script 雨. At 16pt it is a smudge; that size only appears
+in Finder list views, and the menu bar draws an SF Symbol rather than this.
+
 ## Build
 
 Xcode 27 is required for the SDK, but the project is a SwiftPM package — open
