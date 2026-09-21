@@ -17,6 +17,17 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/RainNext"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 
+# Regenerate the icon only when the master is newer; the build should not need
+# Pillow just to produce an unchanged .icns.
+if [ "$ROOT/Resources/AppIcon.png" -nt "$ROOT/Resources/AppIcon.icns" ]; then
+  python3 "$ROOT/Scripts/make-icon.py" || echo "warning: could not rebuild icon" >&2
+fi
+if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
+  cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+else
+  echo "warning: no AppIcon.icns; the app will use the generic icon" >&2
+fi
+
 # A real signing identity matters beyond distribution: macOS refuses to treat
 # an ad-hoc bundle with no Team Identifier as a notification client, reporting
 # .denied without ever prompting. Prefer a certificate, fall back to ad-hoc.
