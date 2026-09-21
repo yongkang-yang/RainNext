@@ -197,6 +197,23 @@ The feed reaches about 15 minutes back and close to three hours forward;
 Sample spacing is read from the data rather than assumed — real payloads do drop
 slots. Coverage is the Benelux.
 
+Buienradar's terms for the free weather data require attribution in a specific
+form — *"bronvermelding (Buienradar.nl) met hyperlink naar
+https://www.buienradar.nl"* — which is why the popover footer carries the name
+and a working link rather than a plain mention.
+
+The same terms permit the data *"alleen voor niet-commerciële doeleinden"* and
+describe the audience as website or intranet use; *"het gebruik voor mobiele
+toepassingen of commerciële doeleinden vereist toestemming van Buienradar"*. A
+macOS menu bar app is neither a website nor literally a mobile application, so
+whether it needs their permission is unresolved — see BD-109.
+
+Note also that the nowcast endpoint used here is not the one the free-data page
+documents. That page links to `gps.buienradar.nl/getrr.php`, which redirects to
+the plain-text `gadgets.buienradar.nl/data/raintext/`. The JSON feed carries
+real timestamps, mm/h and history, which is why it is used instead, but it is
+undocumented.
+
 Not a fork of RainBar — own codebase, own implementation.
 
 ## License

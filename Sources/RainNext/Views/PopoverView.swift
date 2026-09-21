@@ -67,10 +67,11 @@ struct PopoverView: View {
     }
 
     private var footer: some View {
-        HStack {
+        HStack(spacing: 4) {
             Text(lastUpdated)
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
+            attribution
             Spacer()
             Button {
                 state.setNotificationsEnabled(!state.notifications.isEnabled)
@@ -104,7 +105,20 @@ struct PopoverView: View {
     }
 
     private var lastUpdated: String {
-        guard let fetchedAt = state.forecast?.fetchedAt else { return "Not updated yet" }
-        return "Updated \(RainPhrasing.clock(fetchedAt)) · Data: Buienradar"
+        guard let fetchedAt = state.forecast?.fetchedAt else { return "Not updated yet ·" }
+        return "Updated \(RainPhrasing.clock(fetchedAt)) ·"
+    }
+
+    /// Buienradar's terms for the free weather data ask for this exact form:
+    /// "bronvermelding (Buienradar.nl) met hyperlink naar
+    /// https://www.buienradar.nl". The name and the working link are the
+    /// requirement, so neither is decoration.
+    private var attribution: some View {
+        // One step brighter than the timestamp beside it: a hyperlink nobody
+        // can tell is a hyperlink does not really satisfy the requirement.
+        Link("Buienradar.nl", destination: URL(string: "https://www.buienradar.nl")!)
+            .font(.system(size: 10))
+            .foregroundStyle(.secondary)
+            .help("Weather data by Buienradar.nl")
     }
 }
