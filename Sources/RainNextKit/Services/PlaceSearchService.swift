@@ -23,6 +23,22 @@ public final class PlaceSearchService: ObservableObject {
 
     public init() {}
 
+    public static let noResults = "No places found."
+    public static let outsideCoverage = "Outside Buienradar's coverage."
+
+    public struct Outcome: Equatable, Sendable {
+        public let results: [WeatherLocation]
+        public let message: String?
+    }
+
+    /// Pure so the "found nothing" and "found only uncovered places" cases can
+    /// be told apart in a test without going near the geocoder.
+    nonisolated public static func outcome(forFound found: [WeatherLocation]) -> Outcome {
+        let covered = found.filter(BuienradarCoverage.contains)
+        guard covered.isEmpty else { return Outcome(results: covered, message: nil) }
+        return Outcome(results: [], message: found.isEmpty ? noResults : outsideCoverage)
+    }
+
     public func search(_ query: String) {
         task?.cancel()
 
@@ -60,19 +76,15 @@ public final class PlaceSearchService: ObservableObject {
             // A geocoder "no result" is not worth an alarming error message.
             results = []
             message = (error as? CLError)?.code == .geocodeFoundNoResult
-                ? "No places found."
+                ? Self.noResults
                 : error.localizedDescription
             return
         }
         guard !Task.isCancelled else { return }
 
-        let found = placemarks.compactMap(Self.location(from:))
-        let covered = found.filter(BuienradarCoverage.contains)
-
-        results = covered
-        message = covered.isEmpty
-            ? (found.isEmpty ? "No places found." : "Outside Buienradar's coverage.")
-            : nil
+        let outcome = Self.outcome(forFound: placemarks.compactMap(Self.location(from:)))
+        results = outcome.results
+        message = outcome.message
     }
 
     private static func location(from placemark: CLPlacemark) -> WeatherLocation? {

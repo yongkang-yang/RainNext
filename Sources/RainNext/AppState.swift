@@ -43,6 +43,16 @@ final class AppState: ObservableObject {
             .sink { [weak self] location in self?.currentLocationChanged(to: location) }
             .store(in: &cancellables)
 
+        // Views observe AppState, but search results and location updates are
+        // published by these two. A nested ObservableObject's objectWillChange
+        // does not reach the parent's observers on its own, so a view can sit
+        // showing stale content until something unrelated redraws it.
+        for nested in [placeSearch.objectWillChange, locationService.objectWillChange] {
+            nested
+                .sink { [weak self] _ in self?.objectWillChange.send() }
+                .store(in: &cancellables)
+        }
+
         locationService.requestAuthorization()
         startTicking()
         refresh()

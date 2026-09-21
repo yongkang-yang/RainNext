@@ -88,3 +88,36 @@ final class LocationStoreTests: XCTestCase {
         XCTAssertNil(store.selected)
     }
 }
+
+final class PlaceSearchOutcomeTests: XCTestCase {
+    private func place(_ name: String, _ latitude: Double, _ longitude: Double) -> WeatherLocation {
+        WeatherLocation(name: name, latitude: latitude, longitude: longitude, source: .custom)
+    }
+
+    func testCoveredPlacesAreReturnedWithoutAMessage() {
+        let outcome = PlaceSearchService.outcome(forFound: [place("Delft", 52.0116, 4.3571)])
+        XCTAssertEqual(outcome.results.count, 1)
+        XCTAssertNil(outcome.message)
+    }
+
+    func testUncoveredPlacesSayWhyRatherThanNothing() {
+        // Finding Paris and finding nothing are different answers to the user.
+        let outcome = PlaceSearchService.outcome(forFound: [place("Paris", 48.8566, 2.3522)])
+        XCTAssertTrue(outcome.results.isEmpty)
+        XCTAssertEqual(outcome.message, PlaceSearchService.outsideCoverage)
+    }
+
+    func testNothingFoundSaysSo() {
+        let outcome = PlaceSearchService.outcome(forFound: [])
+        XCTAssertEqual(outcome.message, PlaceSearchService.noResults)
+    }
+
+    func testMixedResultsKeepOnlyTheCoveredOnes() {
+        let outcome = PlaceSearchService.outcome(forFound: [
+            place("Paris", 48.8566, 2.3522),
+            place("Utrecht", 52.0907, 5.1214),
+        ])
+        XCTAssertEqual(outcome.results.map(\.name), ["Utrecht"])
+        XCTAssertNil(outcome.message)
+    }
+}
