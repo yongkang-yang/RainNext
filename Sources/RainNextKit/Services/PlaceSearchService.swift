@@ -23,8 +23,10 @@ public final class PlaceSearchService: ObservableObject {
 
     public init() {}
 
-    public static let noResults = "No places found."
-    public static let outsideCoverage = "Outside Buienradar's coverage."
+    // Read by the nonisolated `outcome(forFound:)` below, so they cannot take
+    // the class's main-actor isolation.
+    nonisolated public static let noResults = "No places found."
+    nonisolated public static let outsideCoverage = "Outside Buienradar's coverage."
 
     public struct Outcome: Equatable, Sendable {
         public let results: [WeatherLocation]
