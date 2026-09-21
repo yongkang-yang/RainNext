@@ -18,6 +18,7 @@ final class AppState: ObservableObject {
 
     let locationService = LocationService()
     let placeSearch = PlaceSearchService()
+    let notifications = NotificationService()
 
     private let rainService: RainDataSource
     private let store = LocationStore()
@@ -47,7 +48,7 @@ final class AppState: ObservableObject {
         // published by these two. A nested ObservableObject's objectWillChange
         // does not reach the parent's observers on its own, so a view can sit
         // showing stale content until something unrelated redraws it.
-        for nested in [placeSearch.objectWillChange, locationService.objectWillChange] {
+        for nested in [placeSearch.objectWillChange, locationService.objectWillChange, notifications.objectWillChange] {
             nested
                 .sink { [weak self] _ in self?.objectWillChange.send() }
                 .store(in: &cancellables)
@@ -56,6 +57,10 @@ final class AppState: ObservableObject {
         locationService.requestAuthorization()
         startTicking()
         refresh()
+
+        if ProcessInfo.processInfo.environment["RAINNEXT_TEST_ALERT"] == "1" {
+            Task { await notifications.sendTestAlert() }
+        }
     }
 
     deinit {
@@ -101,8 +106,12 @@ final class AppState: ObservableObject {
 
     func select(_ location: WeatherLocation) {
         prefersCurrentLocation = location.isCurrentLocation
+        let movedElsewhere = !location.isSamePlace(as: selectedLocation)
         selectedLocation = location
         store.selected = location
+        // Another town is another shower; what was already announced here
+        // says nothing about there.
+        if movedElsewhere { notifications.resetLedger() }
         if location.isCurrentLocation { locationService.refresh() }
         refresh()
     }
@@ -129,6 +138,7 @@ final class AppState: ObservableObject {
             guard !Task.isCancelled else { return }
             forecast = result
             errorMessage = nil
+            considerAlert(for: result)
         } catch is CancellationError {
             return
         } catch {
@@ -137,6 +147,20 @@ final class AppState: ObservableObject {
             errorMessage = error.localizedDescription
         }
         now = Date()
+    }
+
+    private func considerAlert(for forecast: RainForecast) {
+        guard notifications.isEnabled else { return }
+        var ledger = notifications.ledger
+        guard let alert = RainAlertPlanner.alert(for: forecast, at: Date(), ledger: ledger) else { return }
+
+        notifications.deliver(alert)
+        ledger.record(alert, at: Date())
+        notifications.ledger = ledger
+    }
+
+    func setNotificationsEnabled(_ enabled: Bool) {
+        Task { await notifications.setEnabled(enabled) }
     }
 
     private func currentLocationChanged(to location: WeatherLocation) {

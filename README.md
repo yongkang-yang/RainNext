@@ -97,6 +97,30 @@ itself remains the authority. If CoreLocation puts you outside the box, the app
 keeps the location you had instead of replacing a working forecast with a
 permanent error.
 
+## Rain alerts
+
+Off until switched on with the bell in the popover. One notification per
+shower, fired once rain is within 20 minutes, only for episodes that clear the
+same `announceFloor` the menu bar countdown uses — the app never interrupts you
+about rain it would not even display. Never while it is already raining.
+
+A ledger records the end of the announced episode, not its start, so a forecast
+that drifts by a few minutes between refreshes does not produce a second
+notification about the same shower. It survives relaunch, and resets when you
+switch to a different place.
+
+Quiet hours are the system's job: the notification is `.active`, not
+`.timeSensitive`, so Focus and Do Not Disturb hold it back.
+
+**Delivery needs a signed build.** macOS reports `.denied` without ever
+prompting for an ad-hoc signed app with no Team Identifier, so the alert never
+arrives. The planner is unit-tested, but the delivery path cannot be exercised
+until the app is signed with a real certificate — see BD-109. Once it is:
+
+```sh
+open --env RAINNEXT_TEST_ALERT=1 build/RainNext.app   # sends one sample alert
+```
+
 ## Refresh
 
 Fetch on launch, every 5 minutes after that, and again when the popover opens

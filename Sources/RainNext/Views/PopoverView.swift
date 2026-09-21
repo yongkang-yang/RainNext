@@ -31,6 +31,15 @@ struct PopoverView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
+            if state.notifications.authorizationDenied {
+                // Silence would look like a broken button. macOS refuses
+                // notifications outright for an unsigned build, without ever
+                // asking the user, so say so instead of failing quietly.
+                Label("macOS refused notifications for this build", systemImage: "bell.slash")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
             Divider()
             footer
         }
@@ -63,6 +72,16 @@ struct PopoverView: View {
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
             Spacer()
+            Button {
+                state.setNotificationsEnabled(!state.notifications.isEnabled)
+            } label: {
+                Image(systemName: state.notifications.isEnabled ? "bell.fill" : "bell.slash")
+            }
+            .buttonStyle(.plain)
+            .help(state.notifications.isEnabled
+                  ? "Rain alerts on — you'll hear about rain about 15 minutes ahead"
+                  : "Turn on rain alerts")
+
             Button {
                 state.refresh()
             } label: {
