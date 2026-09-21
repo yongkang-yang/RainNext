@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import AppKit
 import Combine
 import Foundation
 import os
@@ -13,7 +14,7 @@ final class NotificationService: ObservableObject {
     @Published private(set) var isEnabled: Bool
     @Published private(set) var authorizationDenied = false
 
-    private let log = Logger(subsystem: "com.yongkang.RainNext", category: "notifications")
+    private let log = Logger(subsystem: "nl.yongkang.rainnext", category: "notifications")
     private let defaults: UserDefaults
     private let enabledKey = "RainNext.notificationsEnabled"
     private let ledgerKey = "RainNext.alertLedger"
@@ -50,8 +51,22 @@ final class NotificationService: ObservableObject {
             return
         }
 
-        let granted = (try? await UNUserNotificationCenter.current()
-            .requestAuthorization(options: [.alert, .sound])) ?? false
+        // An accessory app is never frontmost on its own, and the system will
+        // not put a permission prompt in front of an inactive app. In the real
+        // flow the popover already has focus; this makes the request work from
+        // anywhere, including the test hook.
+        NSApp.activate(ignoringOtherApps: true)
+
+        var granted = false
+        do {
+            granted = try await UNUserNotificationCenter.current()
+                .requestAuthorization(options: [.alert, .sound])
+        } catch {
+            // Swallowing this was hiding the reason the bell did nothing.
+            let nserror = error as NSError
+            trace("requestAuthorization threw: \(nserror.domain) \(nserror.code) — \(nserror.localizedDescription)")
+            log.error("requestAuthorization failed: \(error.localizedDescription, privacy: .public)")
+        }
 
         isEnabled = granted
         authorizationDenied = !granted
@@ -80,8 +95,9 @@ final class NotificationService: ObservableObject {
         trace("sent; authorization=\(settings.authorizationStatus.rawValue) alertSetting=\(settings.alertSetting.rawValue)")
     }
 
-    /// Crude on purpose: `open` detaches stdio and os_log was coming back empty,
-    /// so a file is the one channel that definitely survives.
+    /// Only used by the test hook. Crude on purpose: `open` detaches stdio and
+    /// os_log came back empty while diagnosing this, so a file is the one
+    /// channel that definitely survives.
     private func trace(_ message: String) {
         log.notice("\(message, privacy: .public)")
         let line = "\(Date()) \(message)\n"

@@ -17,7 +17,27 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/RainNext"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 
-# Ad-hoc signature: enough for CoreLocation to prompt on this machine.
-codesign --force --sign - --identifier com.yongkang.RainNext "$APP"
+# A real signing identity matters beyond distribution: macOS refuses to treat
+# an ad-hoc bundle with no Team Identifier as a notification client, reporting
+# .denied without ever prompting. Prefer a certificate, fall back to ad-hoc.
+#
+# Identities are matched by SHA-1 hash because two certificates with the same
+# common name make codesign refuse an ambiguous match.
+IDENTITY="${CODESIGN_IDENTITY:-}"
+if [ -z "$IDENTITY" ]; then
+  IDENTITY="$(security find-identity -v -p codesigning \
+    | awk '/Developer ID Application/ {print $2; exit}')"
+fi
+if [ -z "$IDENTITY" ]; then
+  IDENTITY="$(security find-identity -v -p codesigning \
+    | awk '/Apple Development/ {print $2; exit}')"
+fi
+if [ -z "$IDENTITY" ]; then
+  IDENTITY="-"
+  echo "warning: no signing identity found; ad-hoc signing. Notifications will not work." >&2
+fi
+
+codesign --force --sign "$IDENTITY" --identifier nl.yongkang.rainnext "$APP"
+codesign -dv "$APP" 2>&1 | grep -E "^(Signature|TeamIdentifier)" || true
 
 echo "Built $APP"

@@ -112,10 +112,7 @@ switch to a different place.
 Quiet hours are the system's job: the notification is `.active`, not
 `.timeSensitive`, so Focus and Do Not Disturb hold it back.
 
-**Delivery needs a signed build.** macOS reports `.denied` without ever
-prompting for an ad-hoc signed app with no Team Identifier, so the alert never
-arrives. The planner is unit-tested, but the delivery path cannot be exercised
-until the app is signed with a real certificate — see BD-109. Once it is:
+Rain cannot be summoned on demand, so the delivery path has its own hook:
 
 ```sh
 open --env RAINNEXT_TEST_ALERT=1 build/RainNext.app   # sends one sample alert
@@ -143,9 +140,33 @@ RAINNEXT_LIVE=1 swift test --filter LiveEndpointTests   # hits the real feed
 The normal suite is offline and deterministic; the live test is opt-in.
 
 `bundle.sh` wraps the SwiftPM binary in an `.app` with an `Info.plist`
-(`LSUIElement`, location usage strings) and ad-hoc signs it, which is what
-CoreLocation and `MenuBarExtra` need. Migrating to an `.xcodeproj` is the step
-before any signed/App Store distribution.
+(`LSUIElement`, location and notification usage strings), then signs it with the
+first real identity it finds, falling back to ad-hoc with a warning.
+
+**Notifications need a real signature.** macOS refuses to treat an ad-hoc
+bundle with no Team Identifier as a notification client: the very first
+`notificationSettings()` query returns `.denied` and no permission prompt ever
+appears. A free Apple Development certificate (Xcode → Settings → Accounts) is
+enough — the paid programme is only needed to hand the `.app` to other people.
+
+Two traps found the hard way:
+
+- A certificate can be installed and still be invisible to `security
+  find-identity -v -p codesigning`, which filters out anything whose trust
+  chain does not build. If the only WWDR intermediate in the keychain is the
+  G1 that expired in February 2023, every modern certificate looks absent.
+  Install the matching intermediate from
+  <https://www.apple.com/certificateauthority/>.
+- A bundle identifier that was ever denied stays denied, and an app that never
+  registered does not appear in System Settings → Notifications to be switched
+  back on. The identifier changed from `com.yongkang.RainNext` to
+  `nl.yongkang.rainnext` for exactly this reason; preferences live under the
+  identifier, so that reset the saved locations once.
+
+An app run from `/tmp` is not accepted as a notification client either,
+whatever its signature. `build/` and `~/Applications` are both fine.
+
+Migrating to an `.xcodeproj` is the step before any distribution to others.
 
 ## Data
 
