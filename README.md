@@ -16,15 +16,25 @@ v0.1 skeleton — builds, runs, fetches live Buienradar data.
 ## Menu bar notation
 
 ```
-☀           dry for the whole window
-☂ 27m       rain starts in 27 minutes
 ☂ 0.8       raining now at ~0.8 mm/h
+☂ 27m       rain starts in 27 minutes
+🌙 / ☁ / ❄   otherwise, the sky as the nearest station reports it
 ```
 
-Rain further than 90 minutes out gets no countdown. Heavy rain swaps the
-umbrella for a `cloud.heavyrain` symbol. No temperature in v1 — the Buienradar
-nowcast endpoint does not carry one, and adding a second data source for it
-would work against the "one question" principle.
+Rain comes first, because rain is what this app is for: the nowcast wins
+whenever it has something to say, and the station observation fills the gap it
+leaves. Rain further than 90 minutes out gets no countdown, and drizzle that
+never clears `announceFloor` gets none either — in both cases the sky shows
+instead.
+
+Conditions come from Buienradar's icon codes, which are single letters `a`–`w`
+for day and the same letters doubled for night. Night is taken from the code
+rather than from sunrise arithmetic, so the app always agrees with the source
+it is quoting.
+
+No temperature in the menu bar. It is available now — see below — but the bar
+is for one question, and a number there competes with the rain countdown for
+the same glance.
 
 ## Architecture
 
@@ -80,6 +90,19 @@ floor gates *predictions* only — a rate that is falling right now is still sho
 These are estimates. `PayloadLogger` writes every wet response to
 `~/Library/Application Support/RainNext/payloads` (local only, capped at 500
 files) so they can eventually be measured instead — BD-108.
+
+## Conditions
+
+`data.buienradar.nl/2.0/feed/json` is Buienradar's documented free feed: 38 KNMI
+stations, each with coordinates, an icon code, a Dutch description, temperature,
+feels-like, wind speed and direction, gusts, humidity, visibility, air pressure
+and rainfall totals, plus sunrise and sunset. RainNext picks the nearest station
+to the selected place and uses the condition, temperature and wind.
+
+It is a second endpoint, not a replacement: the nowcast answers *when* rain
+starts and stops, this answers *what the sky is doing*. They fail independently
+— losing conditions never surfaces an error over a rain forecast that arrived
+perfectly well.
 
 ## Locations
 

@@ -8,6 +8,7 @@ import RainNextKit
 @MainActor
 final class AppState: ObservableObject {
     @Published private(set) var forecast: RainForecast?
+    @Published private(set) var observation: StationObservation?
     @Published private(set) var isRefreshing = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var now = Date()
@@ -21,6 +22,7 @@ final class AppState: ObservableObject {
     let notifications = NotificationService()
 
     private let rainService: RainDataSource
+    private let observationService: ObservationDataSource
     private let store = LocationStore()
     private var prefersCurrentLocation: Bool
     private var refreshTask: Task<Void, Never>?
@@ -32,8 +34,12 @@ final class AppState: ObservableObject {
     /// Opening the popover only re-fetches if the data has had time to move.
     static let openRefreshInterval: TimeInterval = 60
 
-    init(rainService: RainDataSource = BuienradarRainService()) {
+    init(
+        rainService: RainDataSource = BuienradarRainService(),
+        observationService: ObservationDataSource = BuienradarObservationService()
+    ) {
         self.rainService = rainService
+        self.observationService = observationService
         let saved = store.selected
         self.selectedLocation = saved ?? .fallback
         self.prefersCurrentLocation = saved?.isCurrentLocation ?? true
@@ -69,7 +75,9 @@ final class AppState: ObservableObject {
     }
 
     var status: RainStatus { forecast?.status(at: now) ?? .unavailable }
-    var menuBarState: MenuBarState { MenuBarState.make(from: status, at: now) }
+    var menuBarState: MenuBarState {
+        MenuBarState.make(from: status, observation: observation, at: now)
+    }
 
     var canAddFavourite: Bool { favourites.count < LocationStore.favouritesLimit }
 
@@ -133,8 +141,13 @@ final class AppState: ObservableObject {
         isRefreshing = true
         defer { isRefreshing = false }
 
+        // Two independent endpoints, so they go out together rather than one
+        // waiting on the other.
+        async let rain = rainService.fetchForecast(for: location, now: Date())
+        async let sky = observationService.fetchObservation(near: location)
+
         do {
-            let result = try await rainService.fetchForecast(for: location, now: Date())
+            let result = try await rain
             guard !Task.isCancelled else { return }
             forecast = result
             errorMessage = nil
@@ -146,6 +159,11 @@ final class AppState: ObservableObject {
             // reason to go blank.
             errorMessage = error.localizedDescription
         }
+
+        // Conditions are the nice-to-have half. Losing them must not surface an
+        // error over a rain forecast that arrived perfectly well.
+        observation = try? await sky
+
         now = Date()
     }
 

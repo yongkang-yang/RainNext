@@ -23,10 +23,28 @@ public struct MenuBarState: Equatable, Sendable {
     /// Rain further out than this is not worth a countdown in the menu bar.
     public static let countdownHorizon: TimeInterval = 90 * 60
 
-    public static func make(from status: RainStatus, at now: Date) -> MenuBarState {
+    private static func sky(_ observation: StationObservation) -> MenuBarState {
+        MenuBarState(
+            symbolName: observation.symbolName,
+            text: nil,
+            accessibilityLabel: "RainNext: \(observation.condition.label.lowercased())"
+        )
+    }
+
+    /// `observation` fills the gap the nowcast leaves — everything that is not
+    /// rain. It never overrides the nowcast: rain is what this app is for, and
+    /// a station reporting "cloudy" while rain is falling would be a downgrade.
+    public static func make(
+        from status: RainStatus,
+        observation: StationObservation? = nil,
+        at now: Date
+    ) -> MenuBarState {
         switch status {
         case .unavailable:
-            return MenuBarState(symbolName: "cloud.slash", text: nil, accessibilityLabel: "RainNext: no data")
+            guard let observation else {
+                return MenuBarState(symbolName: "cloud.slash", text: nil, accessibilityLabel: "RainNext: no data")
+            }
+            return sky(observation)
 
         case .dry(let next):
             // `isAnnounceable` gates predictions, not observations: a forecast
@@ -34,7 +52,10 @@ public struct MenuBarState: Equatable, Sendable {
             // cannot be wrong in the same way.
             guard let next, next.isAnnounceable,
                   next.start.timeIntervalSince(now) <= countdownHorizon else {
-                return MenuBarState(symbolName: "sun.max", text: nil, accessibilityLabel: "RainNext: dry")
+                guard let observation else {
+                    return MenuBarState(symbolName: "sun.max", text: nil, accessibilityLabel: "RainNext: dry")
+                }
+                return sky(observation)
             }
             let minutes = max(0, Int((next.start.timeIntervalSince(now) / 60).rounded()))
             return MenuBarState(

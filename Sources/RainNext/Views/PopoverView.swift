@@ -23,7 +23,7 @@ struct PopoverView: View {
     private var main: some View {
         VStack(alignment: .leading, spacing: 12) {
             locationButton
-            StatusSummaryView(status: state.status, now: state.now)
+            StatusSummaryView(status: state.status, observation: state.observation, now: state.now)
             RainTimelineView(forecast: state.forecast, now: state.now)
             if let error = state.errorMessage {
                 Label(error, systemImage: "exclamationmark.triangle")

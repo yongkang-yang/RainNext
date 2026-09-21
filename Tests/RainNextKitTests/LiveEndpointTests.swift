@@ -25,6 +25,13 @@ final class LiveEndpointTests: XCTestCase {
         XCTAssertGreaterThan(end, now)
         XCTAssertLessThanOrEqual(end.timeIntervalSince(now), ForecastWindow.horizon + 600)
 
+        let sky = try await BuienradarObservationService().fetchObservation(near: .fallback)
+        XCTAssertNotEqual(sky.condition, .unknown, "a live icon code the mapping does not cover")
+        XCTAssertLessThan(abs(sky.timestamp.timeIntervalSince(now)), 3 * 3600,
+                          "station observations should be recent")
+        print("live sky: \(sky.stationName), \(sky.condition.label), symbol \(sky.symbolName), "
+              + "night=\(sky.isNight), summary=\(sky.summary)")
+
         print("""
         live: \(forecast.readings.count) readings, \
         \(forecast.readings.filter { $0.timestamp < now }.count) past, \
