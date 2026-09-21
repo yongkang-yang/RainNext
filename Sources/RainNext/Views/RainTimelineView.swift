@@ -1,7 +1,11 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import RainNextKit
 import SwiftUI
 
-/// Two-hour precipitation graph with a NOW marker and hover details.
+/// Precipitation graph with a NOW marker and hover details.
+///
+/// The feed carries a little history, drawn faded before the NOW line, so the
+/// marker sits inside the graph instead of pinned to its left edge.
 struct RainTimelineView: View {
     let forecast: RainForecast?
     let now: Date
@@ -44,7 +48,7 @@ struct RainTimelineView: View {
 
                 HStack(alignment: .bottom, spacing: 1.5) {
                     ForEach(readings) { reading in
-                        bar(for: reading)
+                        bar(for: reading, isPast: reading.timestamp < now)
                     }
                 }
                 .padding(.horizontal, 2)
@@ -55,12 +59,13 @@ struct RainTimelineView: View {
         .frame(height: chartHeight)
     }
 
-    private func bar(for reading: RainReading) -> some View {
+    private func bar(for reading: RainReading, isPast: Bool) -> some View {
         let fraction = min(1, pow(max(0, reading.millimetersPerHour) / fullScale, 0.5))
         let isHovered = hovered?.id == reading.id
+        let opacity = isHovered ? 1 : (isPast ? 0.35 : 0.85)
 
         return RoundedRectangle(cornerRadius: 1.5)
-            .fill(color(for: reading.intensity).opacity(isHovered ? 1 : 0.85))
+            .fill(color(for: reading.intensity).opacity(opacity))
             .frame(height: max(reading.isRaining ? 3 : 1, chartHeight * fraction))
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import Foundation
 
 /// What the menu bar shows. Kept out of the views so the notation is testable
@@ -28,7 +29,11 @@ public struct MenuBarState: Equatable, Sendable {
             return MenuBarState(symbolName: "cloud.slash", text: nil, accessibilityLabel: "RainNext: no data")
 
         case .dry(let next):
-            guard let next, next.start.timeIntervalSince(now) <= countdownHorizon else {
+            // `isAnnounceable` gates predictions, not observations: a forecast
+            // that fails to arrive costs trust, a rate being shown right now
+            // cannot be wrong in the same way.
+            guard let next, next.isAnnounceable,
+                  next.start.timeIntervalSince(now) <= countdownHorizon else {
                 return MenuBarState(symbolName: "sun.max", text: nil, accessibilityLabel: "RainNext: dry")
             }
             let minutes = max(0, Int((next.start.timeIntervalSince(now) / 60).rounded()))

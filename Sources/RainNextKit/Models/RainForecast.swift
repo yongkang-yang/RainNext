@@ -1,4 +1,20 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import Foundation
+
+/// How much of the feed the app actually shows.
+///
+/// Buienradar's JSON feed carries both history and a forecast that runs past
+/// two hours; RainNext is a near-term app, so it trims both ends. The history
+/// is there so the NOW marker sits inside the graph rather than on its left
+/// edge — "it has been raining for 20 minutes and stops in 15" needs the past.
+public enum ForecastWindow {
+    public static let history: TimeInterval = 30 * 60
+    public static let horizon: TimeInterval = 2 * 60 * 60
+
+    public static func range(around now: Date) -> ClosedRange<Date> {
+        now.addingTimeInterval(-history)...now.addingTimeInterval(horizon)
+    }
+}
 
 /// Everything one fetch produced: the raw samples, the episodes derived from
 /// them, and when it was fetched.

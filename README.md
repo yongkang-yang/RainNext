@@ -39,8 +39,9 @@ Sources/
 │   │   ├── MenuBarState      the menu bar notation, testable
 │   │   └── WeatherLocation
 │   └── Services/
-│       ├── BuienradarParser  raintext → [RainReading]
+│       ├── BuienradarForecastParser   JSON feed → [RainReading]
 │       ├── RainService       RainDataSource protocol + Buienradar impl
+│       ├── PayloadLogger     keeps wet payloads for threshold calibration
 │       ├── LocationService   CoreLocation, reduced accuracy
 │       └── LocationStore     remembers the selection
 └── RainNext/           SwiftUI app
@@ -56,8 +57,27 @@ Sources/
 
 Rain is modelled as **episodes**, not as a list of samples — "rain in 18 min",
 "rain for ~35 min", "stops around 19:40" are all questions about an episode.
-Timestamps are resolved into real `Date`s at parse time, including across
-midnight, so no downstream code has to handle `HH:mm` strings.
+
+## Thresholds
+
+Two floors, on purpose:
+
+| | | |
+| --- | --- | --- |
+| `episodeFloor` | 0.1 mm/h | below this a sample is dry |
+| `announceFloor` | 0.4 mm/h | an episode peaking under this never reaches the menu bar |
+| `moderate` / `heavy` | 0.5 / 2.5 mm/h | intensity labels |
+| `minimumEpisodeDuration` | 10 min | one isolated wet sample is usually radar clutter |
+| `episodeMergeGap` | 15 min | bridges the dry slots inside a train of showers |
+
+`episodeFloor` decides what exists; `announceFloor` decides what interrupts you.
+A countdown that expires with nothing falling outside is how people stop
+trusting the number, so drizzle stays on the graph and out of the menu bar. The
+floor gates *predictions* only — a rate that is falling right now is still shown.
+
+These are estimates. `PayloadLogger` writes every wet response to
+`~/Library/Application Support/RainNext/payloads` (local only, capped at 500
+files) so they can eventually be measured instead — BD-108.
 
 ## Refresh
 
@@ -74,7 +94,11 @@ Xcode 27 is required for the SDK, but the project is a SwiftPM package — open
 swift build          # needs DEVELOPER_DIR pointing at Xcode.app if
 swift test           # xcode-select still points at CommandLineTools
 ./Scripts/bundle.sh  # → build/RainNext.app
+
+RAINNEXT_LIVE=1 swift test --filter LiveEndpointTests   # hits the real feed
 ```
+
+The normal suite is offline and deterministic; the live test is opt-in.
 
 `bundle.sh` wraps the SwiftPM binary in an `.app` with an `Info.plist`
 (`LSUIElement`, location usage strings) and ad-hoc signs it, which is what
@@ -83,12 +107,21 @@ before any signed/App Store distribution.
 
 ## Data
 
-Precipitation nowcast from **Buienradar.nl** (`gpsgadget.buienradar.nl/data/raintext`),
-converted with the documented `mm/h = 10 ^ ((value - 109) / 32)`. Coverage is
-the Benelux. Attribution and licensing for public distribution are still open
-(BD-105).
+Precipitation nowcast from **Buienradar.nl**, via the public
+`graphdata.buienradar.nl/2.0/forecast/geo/RainHistoryForecast` feed — no token,
+no API key. Each entry carries a UTC timestamp and a rate in mm/h, plus
+Buienradar's raw radar value, which is kept only for threshold calibration.
+
+The feed reaches about 15 minutes back and close to three hours forward;
+`ForecastWindow` trims that to 30 minutes of history and a 2-hour horizon.
+Sample spacing is read from the data rather than assumed — real payloads do drop
+slots. Coverage is the Benelux.
 
 Not a fork of RainBar — own codebase, own implementation.
+
+## License
+
+[GPL-3.0-or-later](LICENSE). Not distributed commercially.
 
 ## Still open (BD-105)
 

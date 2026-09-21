@@ -1,52 +1,68 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import XCTest
 @testable import RainNextKit
 
 final class RainReadingTests: XCTestCase {
     func testRawValueConversion() {
-        XCTAssertEqual(RainReading(timestamp: .now, rawValue: 0).millimetersPerHour, 0)
-        // Documented anchor: 109 maps to 1 mm/h.
-        XCTAssertEqual(RainReading(timestamp: .now, rawValue: 109).millimetersPerHour, 1, accuracy: 0.0001)
-        XCTAssertEqual(RainReading(timestamp: .now, rawValue: 77).millimetersPerHour, 0.1, accuracy: 0.01)
+        // Kept because the feed still carries the raw radar number, and
+        // calibrating the thresholds (BD-108) needs to read it.
+        XCTAssertEqual(RainReading.millimetersPerHour(fromRawValue: 0), 0)
+        XCTAssertEqual(RainReading.millimetersPerHour(fromRawValue: 109), 1, accuracy: 0.0001)
+        XCTAssertEqual(RainReading.millimetersPerHour(fromRawValue: 77), 0.1, accuracy: 0.01)
     }
 
-    func testDryBelowThreshold() {
-        XCTAssertFalse(RainReading(timestamp: .now, rawValue: 60).isRaining)
-        XCTAssertTrue(RainReading(timestamp: .now, rawValue: 90).isRaining)
+    func testRateComesStraightFromTheFeed() {
+        let reading = RainReading(timestamp: .now, millimetersPerHour: 0.53, rawValue: 100)
+        XCTAssertEqual(reading.millimetersPerHour, 0.53)
+        XCTAssertEqual(reading.rawValue, 100)
+    }
+
+    func testDryBelowFloor() {
+        XCTAssertFalse(RainReading(timestamp: .now, millimetersPerHour: 0.05).isRaining)
+        XCTAssertTrue(RainReading(timestamp: .now, millimetersPerHour: 0.2).isRaining)
     }
 }
 
-final class BuienradarParserTests: XCTestCase {
-    private let amsterdam = TimeZone(identifier: "Europe/Amsterdam")!
+final class BuienradarForecastParserTests: XCTestCase {
+    /// Shaped after a real response, including the dropped 17:30 slot.
+    private let payload = Data("""
+    {"color":"#5A9BD3","lat":52.09,"lon":5.11,
+     "borders":[{"title":"licht","lower":0,"upper":40}],
+     "forecasts":[
+       {"datetime":"2026-09-21T19:20:00","utcdatetime":"2026-09-21T17:20:00","precipitation":0.0,"precipation":0.0,"original":0,"value":0},
+       {"datetime":"2026-09-21T19:25:00","utcdatetime":"2026-09-21T17:25:00","precipitation":0.53,"precipation":0.53,"original":100,"value":10},
+       {"datetime":"2026-09-21T19:35:00","utcdatetime":"2026-09-21T17:35:00","precipitation":1.2,"precipation":1.2,"original":112,"value":22}
+     ]}
+    """.utf8)
 
-    private func reference(_ string: String) -> Date {
-        let formatter = ISO8601DateFormatter()
-        formatter.timeZone = amsterdam
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: string)!
-    }
-
-    func testParsesValuesAndOrder() {
-        let payload = "000|19:20\n077|19:25\n120|19:30\n"
-        let readings = BuienradarParser.parse(payload, reference: reference("2026-09-21T19:18:00+02:00"))
-
+    func testParsesTimestampsAsUTC() throws {
+        let readings = try BuienradarForecastParser.parse(payload)
         XCTAssertEqual(readings.count, 3)
-        XCTAssertEqual(readings.map(\.rawValue), [0, 77, 120])
-        XCTAssertEqual(readings[1].timestamp.timeIntervalSince(readings[0].timestamp), 300)
+
+        var components = DateComponents()
+        components.year = 2026; components.month = 9; components.day = 21
+        components.hour = 17; components.minute = 20
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .gmt
+
+        XCTAssertEqual(readings[0].timestamp, calendar.date(from: components))
     }
 
-    func testRollsOverMidnight() {
-        let payload = "000|23:55\n100|00:00\n100|00:05\n"
-        let readings = BuienradarParser.parse(payload, reference: reference("2026-09-21T23:53:00+02:00"))
-
-        XCTAssertEqual(readings.count, 3)
-        // The 00:00 sample must land on the *next* day, not 24 hours earlier.
-        XCTAssertEqual(readings[1].timestamp.timeIntervalSince(readings[0].timestamp), 300)
-        XCTAssertEqual(readings[2].timestamp.timeIntervalSince(readings[1].timestamp), 300)
+    func testTakesRateAndRawValueFromTheFeed() throws {
+        let readings = try BuienradarForecastParser.parse(payload)
+        XCTAssertEqual(readings[1].millimetersPerHour, 0.53)
+        XCTAssertEqual(readings[1].rawValue, 100)
     }
 
-    func testSkipsMalformedLines() {
-        let payload = "000|19:20\ngarbage\n|\n077|19:25\n"
-        XCTAssertEqual(BuienradarParser.parse(payload, reference: reference("2026-09-21T19:18:00+02:00")).count, 2)
+    func testPreservesUnevenSpacing() throws {
+        let readings = try BuienradarForecastParser.parse(payload)
+        // The feed skipped 17:30; nothing may quietly renumber the slots.
+        XCTAssertEqual(readings[1].timestamp.timeIntervalSince(readings[0].timestamp), 300)
+        XCTAssertEqual(readings[2].timestamp.timeIntervalSince(readings[1].timestamp), 600)
+    }
+
+    func testThrowsOnGarbage() {
+        XCTAssertThrowsError(try BuienradarForecastParser.parse(Data("not json".utf8)))
     }
 }
 
@@ -59,14 +75,14 @@ final class RainEpisodeTests: XCTestCase {
         }
     }
 
-    func testBuildsEpisodeFromConsecutiveWetReadings() {
+    func testBuildsEpisodeFromConsecutiveWetReadings() throws {
         let episodes = RainEpisode.episodes(from: readings([0, 0, 90, 110, 120, 0, 0]))
 
         XCTAssertEqual(episodes.count, 1)
-        let episode = try! XCTUnwrap(episodes.first)
+        let episode = try XCTUnwrap(episodes.first)
         XCTAssertEqual(episode.start, start.addingTimeInterval(600))
         XCTAssertEqual(episode.duration, 900)
-        XCTAssertEqual(episode.peak, .heavy, "raw 120 is ~2.2 mm/h")
+        XCTAssertEqual(episode.peak, .moderate, "raw 120 is ~2.2 mm/h, under the 2.5 heavy line")
     }
 
     func testBridgesSingleDrySample() {
@@ -75,12 +91,44 @@ final class RainEpisodeTests: XCTestCase {
     }
 
     func testSplitsOnLongDryGap() {
-        let episodes = RainEpisode.episodes(from: readings([100, 0, 0, 0, 0, 100]))
+        let episodes = RainEpisode.episodes(from: readings([100, 100, 0, 0, 0, 0, 100, 100]))
         XCTAssertEqual(episodes.count, 2)
+    }
+
+    func testDiscardsSingleSampleBlip() {
+        // Five minutes of rain bracketed by dry is radar clutter more often than weather.
+        XCTAssertTrue(RainEpisode.episodes(from: readings([0, 100, 0, 0])).isEmpty)
     }
 
     func testNoEpisodesWhenDry() {
         XCTAssertTrue(RainEpisode.episodes(from: readings([0, 0, 0])).isEmpty)
+    }
+
+    func testSlotEndFollowsActualSpacing() throws {
+        // 17:30 missing: the wet slot at +300 runs until the next real sample.
+        let uneven = [
+            RainReading(timestamp: start, rawValue: 100),
+            RainReading(timestamp: start.addingTimeInterval(300), rawValue: 100),
+            RainReading(timestamp: start.addingTimeInterval(900), rawValue: 0),
+        ]
+        let episode = try XCTUnwrap(RainEpisode.episodes(from: uneven).first)
+        XCTAssertEqual(episode.end, start.addingTimeInterval(900))
+    }
+
+    func testCapsUnknownStretchAfterALongOutage() throws {
+        let outage = [
+            RainReading(timestamp: start, rawValue: 100),
+            RainReading(timestamp: start.addingTimeInterval(300), rawValue: 100),
+            RainReading(timestamp: start.addingTimeInterval(3600), rawValue: 0),
+        ]
+        let episode = try XCTUnwrap(RainEpisode.episodes(from: outage).first)
+        XCTAssertEqual(episode.end, start.addingTimeInterval(900), "an hour-long hole is not an hour of rain")
+    }
+
+    func testDrizzleIsAnEpisodeButNotAnnounceable() throws {
+        let episode = try XCTUnwrap(RainEpisode.episodes(from: readings([90, 90, 90, 0])).first)
+        XCTAssertGreaterThan(episode.peakIntensity, RainThresholds.episodeFloor)
+        XCTAssertFalse(episode.isAnnounceable, "~0.25 mm/h belongs on the graph, not in the menu bar")
     }
 }
 
@@ -109,8 +157,7 @@ final class RainStatusTests: XCTestCase {
     }
 
     func testDryWholeWindow() {
-        let status = forecast([0, 0, 0]).status(at: start)
-        XCTAssertEqual(status.headline(at: start), "Dry for the next 2 hours")
+        XCTAssertEqual(forecast([0, 0, 0]).headlineNow(start), "Dry for the next 2 hours")
     }
 
     func testUnavailableWithoutReadings() {
@@ -118,8 +165,21 @@ final class RainStatusTests: XCTestCase {
     }
 }
 
+private extension RainForecast {
+    func headlineNow(_ date: Date) -> String { status(at: date).headline(at: date) }
+}
+
 final class MenuBarStateTests: XCTestCase {
     private let start = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func episode(in minutes: Double, rawValue: Int, lasting: Double = 15) -> RainEpisode {
+        let begin = start.addingTimeInterval(minutes * 60)
+        return RainEpisode(
+            start: begin,
+            end: begin.addingTimeInterval(lasting * 60),
+            readings: [RainReading(timestamp: begin, rawValue: rawValue)]
+        )
+    }
 
     func testDryShowsNoText() {
         let state = MenuBarState.make(from: .dry(next: nil), at: start)
@@ -128,22 +188,30 @@ final class MenuBarStateTests: XCTestCase {
     }
 
     func testCountdownForUpcomingRain() {
-        let episode = RainEpisode(
-            start: start.addingTimeInterval(27 * 60),
-            end: start.addingTimeInterval(45 * 60),
-            readings: [RainReading(timestamp: start.addingTimeInterval(27 * 60), rawValue: 110)]
-        )
-        XCTAssertEqual(MenuBarState.make(from: .dry(next: episode), at: start).text, "27m")
+        let state = MenuBarState.make(from: .dry(next: episode(in: 27, rawValue: 110)), at: start)
+        XCTAssertEqual(state.text, "27m")
+    }
+
+    func testDrizzleGetsNoCountdown() {
+        // raw 90 is ~0.25 mm/h: real, but not worth a promise the sky may not keep.
+        let state = MenuBarState.make(from: .dry(next: episode(in: 27, rawValue: 90)), at: start)
+        XCTAssertNil(state.text)
+        XCTAssertEqual(state.symbolName, "sun.max")
     }
 
     func testDistantRainIsNotCountedDown() {
-        let far = start.addingTimeInterval(MenuBarState.countdownHorizon + 600)
-        let episode = RainEpisode(start: far, end: far.addingTimeInterval(300), readings: [])
-        XCTAssertNil(MenuBarState.make(from: .dry(next: episode), at: start).text)
+        let minutes = MenuBarState.countdownHorizon / 60 + 10
+        XCTAssertNil(MenuBarState.make(from: .dry(next: episode(in: minutes, rawValue: 110)), at: start).text)
     }
 
     func testRateWhenRaining() {
-        let episode = RainEpisode(start: start, end: start.addingTimeInterval(600), readings: [])
-        XCTAssertEqual(MenuBarState.make(from: .raining(episode: episode, intensity: 0.84), at: start).text, "0.8")
+        let now = episode(in: 0, rawValue: 110)
+        XCTAssertEqual(MenuBarState.make(from: .raining(episode: now, intensity: 0.84), at: start).text, "0.8")
+    }
+
+    func testCurrentDrizzleIsStillShown() {
+        // The announce floor gates forecasts, not what is happening right now.
+        let now = episode(in: 0, rawValue: 90)
+        XCTAssertEqual(MenuBarState.make(from: .raining(episode: now, intensity: 0.25), at: start).text, "0.2")
     }
 }
