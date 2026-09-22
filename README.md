@@ -1,3 +1,5 @@
+<img src="docs/banner.png" alt="RainNext — a clean weather app for checking upcoming rain at a glance" width="100%">
+
 # RainNext
 
 A lightweight native macOS menu bar app that answers one question:
@@ -7,8 +9,6 @@ A lightweight native macOS menu bar app that answers one question:
 Not a weather app. The menu bar shows a glanceable state, the popover shows the
 next two hours — or, on request, the next twelve or forty-eight — and that is
 the whole product.
-
-Design discussion: [BD-105](https://linear.app/yongkang/issue/BD-105/initial-design-discussion)
 
 ## Status
 
@@ -92,7 +92,7 @@ floor gates *predictions* only — a rate that is falling right now is still sho
 
 These are estimates. `PayloadLogger` writes every wet response to
 `~/Library/Application Support/RainNext/payloads` (local only, capped at 500
-files) so they can eventually be measured instead — BD-108.
+files) so they can eventually be measured instead.
 
 ## Timeline spans
 
@@ -236,14 +236,12 @@ Two traps found the hard way:
   <https://www.apple.com/certificateauthority/>.
 - A bundle identifier that was ever denied stays denied, and an app that never
   registered does not appear in System Settings → Notifications to be switched
-  back on. The identifier changed from `com.yongkang.RainNext` to
-  `nl.yongkang.rainnext` for exactly this reason; preferences live under the
-  identifier, so that reset the saved locations once.
+  back on. The bundle identifier had to be changed once for exactly this
+  reason; preferences live under the identifier, so that reset the saved
+  locations.
 
 An app run from `/tmp` is not accepted as a notification client either,
 whatever its signature. `build/` and `~/Applications` are both fine.
-
-Migrating to an `.xcodeproj` is the step before any distribution to others.
 
 ## Data
 
@@ -266,7 +264,7 @@ The same terms permit the data *"alleen voor niet-commerciële doeleinden"* and
 describe the audience as website or intranet use; *"het gebruik voor mobiele
 toepassingen of commerciële doeleinden vereist toestemming van Buienradar"*. A
 macOS menu bar app is neither a website nor literally a mobile application, so
-whether it needs their permission is unresolved — see BD-109.
+whether it needs their permission is unresolved.
 
 Note also that the nowcast endpoint used here is not the one the free-data page
 documents. That page links to `gps.buienradar.nl/getrr.php`, which redirects to
@@ -274,15 +272,13 @@ the plain-text `gadgets.buienradar.nl/data/raintext/`. The JSON feed carries
 real timestamps, mm/h and history, which is why it is used instead, but it is
 undocumented.
 
-Not a fork of RainBar — own codebase, own implementation.
-
 ## License
 
 [GPL-3.0-or-later](LICENSE). Not distributed commercially.
 
-## Still open (BD-105)
+## Still open
 
-- notification before rain starts — not built (BD-106)
-- threshold calibration against real readings (BD-108)
-- Buienradar attribution wording (BD-109)
+- threshold calibration against real readings
+- Buienradar attribution wording
+- migration to an `.xcodeproj`, the step before distributing to anyone else
 - radar imagery is intentionally excluded from v1
