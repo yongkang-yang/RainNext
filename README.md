@@ -5,7 +5,8 @@ A lightweight native macOS menu bar app that answers one question:
 > What will the rain situation be over the next couple of hours?
 
 Not a weather app. The menu bar shows a glanceable state, the popover shows the
-next ~2 hours, and that is the whole product.
+next two hours — or, on request, the next twelve or forty-eight — and that is
+the whole product.
 
 Design discussion: [BD-105](https://linear.app/yongkang/issue/BD-105/initial-design-discussion)
 
@@ -45,6 +46,8 @@ Sources/
 │   │   ├── RainReading       one 5-minute sample, raw value → mm/h
 │   │   ├── RainEpisode       a continuous stretch of rain
 │   │   ├── RainForecast      readings + episodes + RainStatus
+│   │   ├── HourlyRainForecast  the long spans, no episodes
+│   │   ├── ForecastSpan      2h / 12h / 48h, and which feed answers
 │   │   ├── RainIntensity     thresholds in one place
 │   │   ├── MenuBarState      the menu bar notation, testable
 │   │   └── WeatherLocation
@@ -63,7 +66,7 @@ Sources/
         ├── MenuBarStatusView
         ├── PopoverView
         ├── StatusSummaryView
-        ├── RainTimelineView   2-hour graph, NOW marker, hover details
+        ├── RainTimelineView   span picker, graph, NOW marker, hover details
         └── LocationPickerView
 ```
 
@@ -90,6 +93,40 @@ floor gates *predictions* only — a rate that is falling right now is still sho
 These are estimates. `PayloadLogger` writes every wet response to
 `~/Library/Application Support/RainNext/payloads` (local only, capped at 500
 files) so they can eventually be measured instead — BD-108.
+
+## Timeline spans
+
+The popover opens on two hours and switches to twelve or forty-eight, which is
+a change of **feed**, not just of zoom:
+
+| Span | Product | Steps | Reach |
+| --- | --- | --- | --- |
+| 2h | `RainHistoryForecast` | 5 min | −30 min → +2 h |
+| 12h / 48h | `Rain24Hour` | 1 hour | next 48 h |
+
+Both live on `graphdata.buienradar.nl/2.0/forecast/geo/`, differ only in the
+product name, and decode identically — one parser covers both.
+
+Two hours is radar: echoes that exist, moved forward. Everything longer is
+model output, which knows about rain that has not formed yet and is wrong in
+different ways. The header names which one is on screen instead of blending
+them, because "rain at 18:00" has not earned the trust "rain in 20 minutes"
+has. For the same reason the long spans skip `RainEpisode` entirely: a
+ten-minute minimum duration and a fifteen-minute merge gap are calibrated for
+five-minute radar and would invent episodes out of hourly numbers rather than
+find them.
+
+**The host answers an unknown product name with the two-hour nowcast, at 200
+rather than with an error.** `Rain12Hour`, `Rain6Hour`, `RainChance` and a dozen
+other plausible names all silently return five-minute radar. Spacing is the only
+thing that tells the two apart, so `HourlyRainForecast.isHourly` checks it and
+the service refuses a payload that fails — otherwise a typo would look like a
+working feature. Measured alongside these: `Rain5Day` (5 days hourly, but
+snapped to a different grid point and missing `original`), `Temp24Hour`,
+`Snow24Hour` and `Sun24Hour`.
+
+The hourly feed is fetched only while a long span is selected, and at most every
+15 minutes — it moves far more slowly than the radar does.
 
 ## Conditions
 

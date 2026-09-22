@@ -102,4 +102,39 @@ public enum RainPhrasing {
     public static func clock(_ date: Date) -> String {
         date.formatted(date: .omitted, time: .shortened)
     }
+
+    /// Names the day once the time is no longer today's. Two days out, "18:00"
+    /// on its own is a different promise than the one it looks like.
+    public static func clock(_ date: Date, relativeTo now: Date) -> String {
+        switch daysApart(date, from: now) {
+        case 0: return clock(date)
+        case 1: return "tomorrow \(clock(date))"
+        default: return "\(date.formatted(.dateTime.weekday(.abbreviated))) \(clock(date))"
+        }
+    }
+
+    /// The moment a window closes, which is not always a time of day: the hour
+    /// after 23:00 ends at midnight, and "tomorrow 12:00 AM" reads as a bug.
+    public static func boundary(_ date: Date, relativeTo now: Date) -> String {
+        let calendar = Calendar.current
+        guard calendar.startOfDay(for: date) == date else { return clock(date, relativeTo: now) }
+
+        // Midnight belongs to the day it closes, so it is named after that one.
+        let closing = date.addingTimeInterval(-1)
+        switch daysApart(closing, from: now) {
+        case 0: return "midnight"
+        case 1: return "tomorrow midnight"
+        default: return "\(closing.formatted(.dateTime.weekday(.abbreviated))) midnight"
+        }
+    }
+
+    /// Whole days between two moments, counted from `now` rather than with
+    /// `isDateInTomorrow`, which is relative to the real clock and would
+    /// quietly ignore the argument.
+    private static func daysApart(_ date: Date, from now: Date) -> Int {
+        let calendar = Calendar.current
+        return calendar.dateComponents(
+            [.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date)
+        ).day ?? 0
+    }
 }

@@ -12,6 +12,7 @@ public final class LocationStore: @unchecked Sendable {
     private let selectedKey = "RainNext.selectedLocation"
     private let favouritesKey = "RainNext.favourites"
     private let seededKey = "RainNext.didSeedFavourites"
+    private let spanKey = "RainNext.forecastSpan"
 
     /// Past this the picker stops being glanceable, which is the whole point.
     public static let favouritesLimit = 12
@@ -23,6 +24,13 @@ public final class LocationStore: @unchecked Sendable {
     public var selected: WeatherLocation? {
         get { decode(WeatherLocation.self, forKey: selectedKey) }
         set { encode(newValue, forKey: selectedKey) }
+    }
+
+    /// Which timeline span the popover opens on. Someone who keeps checking
+    /// the evening should not have to click back to it every launch.
+    public var span: ForecastSpan? {
+        get { ForecastSpan(rawValue: defaults.string(forKey: spanKey) ?? "") }
+        set { defaults.set(newValue?.rawValue, forKey: spanKey) }
     }
 
     public var favourites: [WeatherLocation] {

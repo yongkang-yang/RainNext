@@ -2,42 +2,89 @@
 import RainNextKit
 import SwiftUI
 
-/// Precipitation graph with a NOW marker and hover details.
+/// Precipitation graph with a span picker, a NOW marker and hover details.
 ///
-/// The feed carries a little history, drawn faded before the NOW line, so the
-/// marker sits inside the graph instead of pinned to its left edge.
+/// Two hours is the radar nowcast, drawn with a little history so the NOW
+/// marker sits inside the graph instead of pinned to its left edge. The longer
+/// spans are hourly model output and carry no history at all — they are a
+/// different feed, and the header says so rather than letting one bar chart
+/// imply one kind of certainty.
 struct RainTimelineView: View {
     let forecast: RainForecast?
+    let hourly: HourlyRainForecast?
+    @Binding var span: ForecastSpan
     let now: Date
 
     @State private var hovered: RainReading?
 
-    /// mm/h that fills the chart to the top.
+    /// mm/h that fills the chart to the top. One scale across every span, so a
+    /// bar height means the same thing whichever one is showing.
     private let fullScale: Double = 4.0
     private let chartHeight: CGFloat = 64
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            spanPicker
             header
             chart
             axis
         }
+        // A bar under the pointer belongs to the span that was showing.
+        .onChange(of: span) { hovered = nil }
     }
 
-    private var readings: [RainReading] { forecast?.readings ?? [] }
+    private var bars: [RainReading] {
+        span.isNowcast
+            ? forecast?.readings ?? []
+            : hourly?.readings(within: span, at: now) ?? []
+    }
+
+    private var slot: TimeInterval {
+        span.isNowcast ? RainThresholds.sampleInterval : HourlyRainForecast.slot
+    }
+
+    private var spanPicker: some View {
+        HStack(spacing: 8) {
+            Picker("Span", selection: $span) {
+                ForEach(ForecastSpan.allCases) { span in
+                    Text(span.label).tag(span)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 150)
+
+            Spacer()
+
+            // Which feed this is. "Rain at 18:00" and "rain in 20 minutes" are
+            // not the same claim, and only one of them comes from radar.
+            Text(span.sourceLabel)
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+        }
+    }
 
     private var header: some View {
         HStack {
-            Text("Next 2 hours")
+            Text(summary)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
             Spacer()
             if let hovered {
-                Text("\(RainPhrasing.clock(hovered.timestamp)) · \(RainPhrasing.rate(hovered.millimetersPerHour))")
+                Text("\(RainPhrasing.clock(hovered.timestamp, relativeTo: now)) · \(RainPhrasing.rate(hovered.millimetersPerHour))")
                     .font(.system(size: 11).monospacedDigit())
                     .foregroundStyle(.secondary)
+                    .fixedSize()
             }
         }
+    }
+
+    /// The nowcast span says nothing here that the headline above it has not
+    /// already said; the long spans are the only place their own answer fits.
+    private var summary: String {
+        guard !span.isNowcast else { return span.title }
+        return hourly?.summary(within: span, at: now) ?? span.title
     }
 
     private var chart: some View {
@@ -46,11 +93,17 @@ struct RainTimelineView: View {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(Color.primary.opacity(0.05))
 
+                if bars.isEmpty {
+                    Text(span.isNowcast ? "No forecast" : "No hourly forecast yet")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                }
+
                 // Rain grows up from the floor, so the bars hang off the
                 // bottom edge — not off the top, which is where a topLeading
                 // ZStack quietly puts them.
                 HStack(alignment: .bottom, spacing: 1.5) {
-                    ForEach(readings) { reading in
+                    ForEach(bars) { reading in
                         bar(for: reading, isPast: reading.timestamp < now)
                     }
                 }
@@ -64,6 +117,7 @@ struct RainTimelineView: View {
                     .frame(height: 1)
                     .frame(maxHeight: .infinity, alignment: .bottom)
 
+                dayMarkers(in: geometry.size)
                 nowMarker(in: geometry.size)
             }
         }
@@ -105,17 +159,38 @@ struct RainTimelineView: View {
         }
     }
 
+    /// Midnights, so two days of bars do not read as one very long day.
+    @ViewBuilder
+    private func dayMarkers(in size: CGSize) -> some View {
+        if !span.isNowcast, bars.count > 1 {
+            let calendar = Calendar.current
+            ForEach(bars.indices.filter { calendar.component(.hour, from: bars[$0].timestamp) == 0 }, id: \.self) { index in
+                Rectangle()
+                    .fill(Color.primary.opacity(0.18))
+                    .frame(width: 1)
+                    .frame(maxHeight: .infinity)
+                    .position(x: size.width * (Double(index) / Double(bars.count)), y: size.height / 2)
+            }
+        }
+    }
+
     private var nowFraction: Double? {
-        guard let start = forecast?.start, let end = forecast?.end, end > start else { return nil }
+        guard span.isNowcast, let start = forecast?.start, let end = forecast?.end, end > start else { return nil }
         let fraction = now.timeIntervalSince(start) / end.timeIntervalSince(start)
         return (0...1).contains(fraction) ? fraction : nil
     }
 
     private var axis: some View {
         HStack {
-            if let start = forecast?.start { Text(RainPhrasing.clock(start)) }
+            if let first = bars.first {
+                Text(RainPhrasing.clock(first.timestamp))
+            }
             Spacer()
-            if let end = forecast?.end { Text(RainPhrasing.clock(end)) }
+            if let last = bars.last {
+                // The right edge is where the window closes, not a time
+                // something happens at — "tomorrow 12:00 AM" means midnight.
+                Text(RainPhrasing.boundary(last.timestamp.addingTimeInterval(slot), relativeTo: now))
+            }
         }
         .font(.system(size: 10).monospacedDigit())
         .foregroundStyle(.tertiary)

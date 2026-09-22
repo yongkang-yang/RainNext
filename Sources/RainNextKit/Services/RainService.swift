@@ -3,6 +3,7 @@ import Foundation
 
 public protocol RainDataSource: Sendable {
     func fetchForecast(for location: WeatherLocation, now: Date) async throws -> RainForecast
+    func fetchHourly(for location: WeatherLocation, now: Date) async throws -> HourlyRainForecast
 }
 
 public enum RainServiceError: LocalizedError, Equatable {
@@ -23,11 +24,23 @@ public enum RainServiceError: LocalizedError, Equatable {
     }
 }
 
-/// Precipitation nowcast from Buienradar's public `RainHistoryForecast` feed.
-/// No token, no key, and the response carries UTC timestamps and mm/h directly.
+/// Precipitation from Buienradar's public graph feeds. No token, no key, and
+/// the responses carry UTC timestamps and mm/h directly.
+///
+/// One host serves several products off the same path, differing only in the
+/// name: `RainHistoryForecast` is the two-hour radar nowcast at five-minute
+/// steps, `Rain24Hour` is hourly model output. They decode identically, so one
+/// parser covers both.
 public struct BuienradarRainService: RainDataSource {
     private let session: URLSession
     private let logger: PayloadLogger?
+
+    /// Radar echoes moved forward: five-minute steps, half an hour of history
+    /// and a little over two hours ahead.
+    private static let nowcastProduct = "RainHistoryForecast"
+    /// Hourly model output. Named for a day, but it answers with two — the app
+    /// takes what it is given rather than assuming either number.
+    private static let hourlyProduct = "Rain24Hour"
 
     public init(session: URLSession = .shared, logger: PayloadLogger? = PayloadLogger()) {
         self.session = session
@@ -35,7 +48,42 @@ public struct BuienradarRainService: RainDataSource {
     }
 
     public func fetchForecast(for location: WeatherLocation, now: Date = Date()) async throws -> RainForecast {
-        var components = URLComponents(string: "https://graphdata.buienradar.nl/2.0/forecast/geo/RainHistoryForecast")
+        let (data, readings) = try await fetch(Self.nowcastProduct, for: location)
+
+        if let logger {
+            Task.detached(priority: .utility) { logger.record(data, location: location, at: now) }
+        }
+
+        // The feed reaches further back and further forward than this app cares about.
+        let window = ForecastWindow.range(around: now)
+        let windowed = readings.filter { window.contains($0.timestamp) }
+
+        return RainForecast(
+            location: location,
+            readings: windowed.isEmpty ? readings : windowed,
+            fetchedAt: now
+        )
+    }
+
+    public func fetchHourly(for location: WeatherLocation, now: Date = Date()) async throws -> HourlyRainForecast {
+        let (_, readings) = try await fetch(Self.hourlyProduct, for: location)
+
+        // An unrecognised product name is answered with the nowcast, at 200
+        // rather than with an error. Without this the app would draw
+        // five-minute radar under a "48 hours" label and never notice.
+        guard HourlyRainForecast.isHourly(readings) else { throw RainServiceError.malformedPayload }
+
+        return HourlyRainForecast(
+            location: location,
+            readings: readings.filter { $0.timestamp > now.addingTimeInterval(-HourlyRainForecast.slot) },
+            fetchedAt: now
+        )
+    }
+
+    private func fetch(
+        _ product: String, for location: WeatherLocation
+    ) async throws -> (data: Data, readings: [RainReading]) {
+        var components = URLComponents(string: "https://graphdata.buienradar.nl/2.0/forecast/geo/\(product)")
         // Two decimals is all the feed resolves, and it keeps coarse location coarse.
         components?.queryItems = [
             URLQueryItem(name: "lat", value: String(format: "%.2f", location.latitude)),
@@ -62,18 +110,6 @@ public struct BuienradarRainService: RainDataSource {
         }
         guard !readings.isEmpty else { throw RainServiceError.emptyPayload }
 
-        if let logger {
-            Task.detached(priority: .utility) { logger.record(data, location: location, at: now) }
-        }
-
-        // The feed reaches further back and further forward than this app cares about.
-        let window = ForecastWindow.range(around: now)
-        let windowed = readings.filter { window.contains($0.timestamp) }
-
-        return RainForecast(
-            location: location,
-            readings: windowed.isEmpty ? readings : windowed,
-            fetchedAt: now
-        )
+        return (data, readings)
     }
 }

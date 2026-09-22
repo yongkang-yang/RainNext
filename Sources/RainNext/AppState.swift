@@ -8,6 +8,7 @@ import RainNextKit
 @MainActor
 final class AppState: ObservableObject {
     @Published private(set) var forecast: RainForecast?
+    @Published private(set) var hourly: HourlyRainForecast?
     @Published private(set) var observation: StationObservation?
     @Published private(set) var isRefreshing = false
     @Published private(set) var errorMessage: String?
@@ -16,6 +17,9 @@ final class AppState: ObservableObject {
     @Published private(set) var favourites: [WeatherLocation]
     /// Set when CoreLocation puts the user somewhere Buienradar cannot see.
     @Published private(set) var currentLocationIsCovered = true
+    /// How far ahead the popover timeline looks. Only the nowcast span is
+    /// served by the forecast above; the longer ones need `hourly`.
+    @Published var span: ForecastSpan { didSet { spanChanged(from: oldValue) } }
 
     let locationService = LocationService()
     let placeSearch = PlaceSearchService()
@@ -33,6 +37,9 @@ final class AppState: ObservableObject {
     static let refreshInterval: TimeInterval = 5 * 60
     /// Opening the popover only re-fetches if the data has had time to move.
     static let openRefreshInterval: TimeInterval = 60
+    /// The hourly feed moves far more slowly than the radar, and is on screen
+    /// only while a long span is selected, so it skips most five-minute ticks.
+    static let hourlyRefreshInterval: TimeInterval = 15 * 60
 
     init(
         rainService: RainDataSource = BuienradarRainService(),
@@ -43,6 +50,7 @@ final class AppState: ObservableObject {
         let saved = store.selected
         self.selectedLocation = saved ?? .fallback
         self.prefersCurrentLocation = saved?.isCurrentLocation ?? true
+        self.span = store.span ?? .twoHours
         self.favourites = store.seedIfNeeded()
 
         locationService.$currentLocation
@@ -119,7 +127,10 @@ final class AppState: ObservableObject {
         store.selected = location
         // Another town is another shower; what was already announced here
         // says nothing about there.
-        if movedElsewhere { notifications.resetLedger() }
+        if movedElsewhere {
+            notifications.resetLedger()
+            hourly = nil
+        }
         if location.isCurrentLocation { locationService.refresh() }
         refresh()
     }
@@ -164,7 +175,33 @@ final class AppState: ObservableObject {
         // error over a rain forecast that arrived perfectly well.
         observation = try? await sky
 
+        if !span.isNowcast { await refreshHourly(for: location) }
+
         now = Date()
+    }
+
+    private func spanChanged(from previous: ForecastSpan) {
+        guard span != previous else { return }
+        store.span = span
+        guard !span.isNowcast else { return }
+        let location = selectedLocation
+        Task { [weak self] in await self?.refreshHourly(for: location) }
+    }
+
+    /// Fetches the hourly feed unless what is already loaded is for this place
+    /// and still fresh. A failure keeps the previous hours on screen, for the
+    /// same reason a failed nowcast refresh does.
+    private func refreshHourly(for location: WeatherLocation) async {
+        if let hourly, hourly.location.isSamePlace(as: location),
+           Date().timeIntervalSince(hourly.fetchedAt) < Self.hourlyRefreshInterval {
+            return
+        }
+        if let fetched = try? await rainService.fetchHourly(for: location, now: Date()) {
+            // A slow answer for the town the user just left must not appear
+            // under the name of the one they moved to.
+            guard !Task.isCancelled, location.isSamePlace(as: selectedLocation) else { return }
+            hourly = fetched
+        }
     }
 
     private func considerAlert(for forecast: RainForecast) {
@@ -191,6 +228,7 @@ final class AppState: ObservableObject {
             || abs(location.longitude - selectedLocation.longitude) > 0.01
         selectedLocation = location
         store.selected = location
+        if moved { hourly = nil }
         if moved || forecast == nil { refresh() }
     }
 
