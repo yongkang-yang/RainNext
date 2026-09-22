@@ -80,7 +80,7 @@ struct PopoverView: View {
             }
             .buttonStyle(.plain)
             .help(state.notifications.isEnabled
-                  ? "Rain alerts on — you'll hear about rain about 15 minutes ahead"
+                  ? "Rain alerts on — you'll hear about rain about 30 minutes ahead"
                   : "Turn on rain alerts")
 
             Button {

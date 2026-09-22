@@ -21,9 +21,9 @@ public struct RainAlert: Equatable, Sendable {
 /// anything. Pure, so every rule below is testable.
 public enum RainAlertPlanner {
     /// Announce once rain is this close. With a five-minute refresh the actual
-    /// lead time lands between 15 and 20 minutes — enough to grab a coat or
-    /// change plans, and close enough in that the nowcast is worth trusting.
-    public static let horizon: TimeInterval = 20 * 60
+    /// lead time lands between 25 and 30 minutes — more time to change plans,
+    /// at the cost of leaning on a nowcast that is less certain this far out.
+    public static let horizon: TimeInterval = 30 * 60
 
     /// A floor on how often the app may interrupt, whatever the sky does.
     public static let minimumInterval: TimeInterval = 20 * 60

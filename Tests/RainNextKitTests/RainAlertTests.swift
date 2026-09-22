@@ -25,6 +25,11 @@ final class RainAlertPlannerTests: XCTestCase {
         XCTAssertEqual(alert.episodeStart, start.addingTimeInterval(15 * 60))
     }
 
+    func testAnnouncesRainLaterInTheHorizon() throws {
+        let alert = try XCTUnwrap(RainAlertPlanner.alert(for: rainStarting(inMinutes: 25), at: start, ledger: .init()))
+        XCTAssertEqual(alert.episodeStart, start.addingTimeInterval(25 * 60))
+    }
+
     func testSaysNothingAboutRainStillFarOff() {
         // 45 minutes out: the nowcast will have changed its mind twice by then.
         XCTAssertNil(RainAlertPlanner.alert(for: rainStarting(inMinutes: 45), at: start, ledger: .init()))

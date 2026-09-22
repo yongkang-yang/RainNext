@@ -123,7 +123,7 @@ permanent error.
 ## Rain alerts
 
 Off until switched on with the bell in the popover. One notification per
-shower, fired once rain is within 20 minutes, only for episodes that clear the
+shower, fired once rain is within 30 minutes, only for episodes that clear the
 same `announceFloor` the menu bar countdown uses — the app never interrupts you
 about rain it would not even display. Never while it is already raining.
 
