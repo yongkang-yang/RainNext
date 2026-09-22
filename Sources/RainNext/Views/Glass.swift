@@ -74,13 +74,23 @@ enum Metrics {
     static let cardPadding: CGFloat = 12
     static let chartRadius: CGFloat = 6
     static let iconButton: CGFloat = 28
+    static let searchHeight: CGFloat = 32
+    static let rowHeight: CGFloat = 28
+    static let rowInset: CGFloat = 6
+    static let rowRadius: CGFloat = cardRadius - rowInset
+    static let listInset: CGFloat = 8
 }
 
 /// Rounds the MenuBarExtra window itself.
 ///
 /// SwiftUI offers no way to shape that window, and its stock corner is far
-/// tighter than the rest of macOS 26. The material and the shadow both follow
-/// the frame view's layer, so rounding and masking that layer is enough.
+/// tighter than the rest of macOS 26. Masking the frame view's layer rounds
+/// the material, but not the shadow: the window server still casts it from
+/// the window's own corner radius, which leaves square corners showing on a
+/// light desktop. Only the window can change that radius, and only through
+/// `_setCornerRadius:`, which is private. It is looked up at runtime, so if a
+/// future macOS drops it the content stays rounded and the shadow goes back
+/// to the stock shape. Nothing breaks.
 struct PopoverWindowShape: NSViewRepresentable {
     let cornerRadius: CGFloat
 
@@ -104,6 +114,12 @@ struct PopoverWindowShape: NSViewRepresentable {
             frame.layer?.cornerRadius = cornerRadius
             frame.layer?.cornerCurve = .continuous
             frame.layer?.masksToBounds = true
+
+            let setCornerRadius = NSSelectorFromString("_setCornerRadius:")
+            if window.responds(to: setCornerRadius) {
+                typealias Setter = @convention(c) (NSWindow, Selector, CGFloat) -> Void
+                unsafeBitCast(window.method(for: setCornerRadius), to: Setter.self)(window, setCornerRadius, cornerRadius)
+            }
             window.invalidateShadow()
         }
     }
