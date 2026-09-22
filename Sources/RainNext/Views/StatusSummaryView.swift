@@ -11,10 +11,10 @@ struct StatusSummaryView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(status.headline(at: now))
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 19, weight: .semibold))
             if let detail = status.detail(at: now) {
                 Text(detail)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }
             if let observation {

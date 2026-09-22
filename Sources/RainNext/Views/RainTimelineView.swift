@@ -20,10 +20,10 @@ struct RainTimelineView: View {
     /// mm/h that fills the chart to the top. One scale across every span, so a
     /// bar height means the same thing whichever one is showing.
     private let fullScale: Double = 4.0
-    private let chartHeight: CGFloat = 64
+    private let chartHeight: CGFloat = 96
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             spanPicker
             header
             chart
@@ -90,8 +90,8 @@ struct RainTimelineView: View {
     private var chart: some View {
         GeometryReader { geometry in
             ZStack {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.primary.opacity(0.05))
+                RoundedRectangle(cornerRadius: Metrics.chartRadius, style: .continuous)
+                    .fill(Color.primary.opacity(0.04))
 
                 if bars.isEmpty {
                     Text(span.isNowcast ? "No forecast" : "No hourly forecast yet")
@@ -102,12 +102,12 @@ struct RainTimelineView: View {
                 // Rain grows up from the floor, so the bars hang off the
                 // bottom edge — not off the top, which is where a topLeading
                 // ZStack quietly puts them.
-                HStack(alignment: .bottom, spacing: 1.5) {
+                HStack(alignment: .bottom, spacing: 2) {
                     ForEach(bars) { reading in
                         bar(for: reading, isPast: reading.timestamp < now)
                     }
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, 3)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
 
                 // A floor line, so an all-dry window reads as "measured, and
@@ -122,6 +122,8 @@ struct RainTimelineView: View {
             }
         }
         .frame(height: chartHeight)
+        // Bars and markers stay inside the chart's own curve.
+        .clipShape(RoundedRectangle(cornerRadius: Metrics.chartRadius, style: .continuous))
     }
 
     private func bar(for reading: RainReading, isPast: Bool) -> some View {
@@ -129,7 +131,7 @@ struct RainTimelineView: View {
         let isHovered = hovered?.id == reading.id
         let opacity = isHovered ? 1 : (isPast ? 0.35 : 0.85)
 
-        return RoundedRectangle(cornerRadius: 1.5)
+        return UnevenRoundedRectangle(topLeadingRadius: 2, topTrailingRadius: 2, style: .continuous)
             .fill(color(for: reading.intensity).opacity(opacity))
             .frame(height: max(reading.isRaining ? 3 : 2, chartHeight * fraction))
             .frame(maxWidth: .infinity)

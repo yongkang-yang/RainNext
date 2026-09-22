@@ -26,8 +26,8 @@ struct LocationPickerView: View {
                 savedSection
             }
         }
-        .padding(14)
-        .frame(width: 320)
+        .padding(Metrics.popoverPadding)
+        .frame(width: Metrics.popoverWidth)
         .onDisappear { state.placeSearch.clear() }
     }
 
@@ -40,9 +40,16 @@ struct LocationPickerView: View {
             Text("Location")
                 .font(.system(size: 13, weight: .semibold))
             Spacer()
-            Button("Done", action: onDismiss)
-                .buttonStyle(.plain)
-                .foregroundStyle(.tint)
+            Button(action: onDismiss) {
+                Text("Done")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.tint)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .contentShape(Capsule())
+                    .glassSurface(in: Capsule(), interactive: true)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -72,9 +79,9 @@ struct LocationPickerView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 5)
-        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .glassSurface(in: Capsule())
     }
 
     @ViewBuilder

@@ -14,6 +14,7 @@ struct PopoverView: View {
                 main
             }
         }
+        .background(PopoverWindowShape(cornerRadius: Metrics.popoverRadius))
         .onAppear {
             // BD-105: refresh when the popover opens.
             state.refresh(minimumAge: AppState.openRefreshInterval)
@@ -21,7 +22,7 @@ struct PopoverView: View {
     }
 
     private var main: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             locationButton
             StatusSummaryView(status: state.status, observation: state.observation, now: state.now)
             RainTimelineView(
@@ -30,6 +31,8 @@ struct PopoverView: View {
                 span: $state.span,
                 now: state.now
             )
+            .padding(Metrics.cardPadding)
+            .card()
             if let error = state.errorMessage {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.system(size: 11))
@@ -45,28 +48,30 @@ struct PopoverView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
-            Divider()
             footer
         }
-        .padding(14)
-        .frame(width: 320)
+        .padding(Metrics.popoverPadding)
+        .frame(width: Metrics.popoverWidth)
     }
 
     private var locationButton: some View {
         Button {
             isPickingLocation = true
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 Image(systemName: state.selectedLocation.isCurrentLocation ? "location.fill" : "mappin")
                     .font(.system(size: 10))
                 Text(state.selectedLocation.name)
                     .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .semibold))
-                Spacer()
+                    .foregroundStyle(.secondary)
             }
-            .foregroundStyle(.secondary)
-            .contentShape(Rectangle())
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .contentShape(Capsule())
+            .glassSurface(in: Capsule(), interactive: true)
         }
         .buttonStyle(.plain)
     }
@@ -78,33 +83,25 @@ struct PopoverView: View {
                 .foregroundStyle(.tertiary)
             attribution
             Spacer()
-            Button {
-                state.setNotificationsEnabled(!state.notifications.isEnabled)
-            } label: {
-                Image(systemName: state.notifications.isEnabled ? "bell.fill" : "bell.slash")
+            GlassGroup {
+                HStack(spacing: 6) {
+                    GlassIconButton(
+                        symbol: state.notifications.isEnabled ? "bell.fill" : "bell.slash",
+                        help: state.notifications.isEnabled
+                            ? "Rain alerts on — you'll hear about rain about 30 minutes ahead"
+                            : "Turn on rain alerts"
+                    ) {
+                        state.setNotificationsEnabled(!state.notifications.isEnabled)
+                    }
+                    GlassIconButton(symbol: "arrow.clockwise", help: "Refresh now", dimmed: state.isRefreshing) {
+                        state.refresh()
+                    }
+                    .disabled(state.isRefreshing)
+                    GlassIconButton(symbol: "power", help: "Quit RainNext") {
+                        NSApplication.shared.terminate(nil)
+                    }
+                }
             }
-            .buttonStyle(.plain)
-            .help(state.notifications.isEnabled
-                  ? "Rain alerts on — you'll hear about rain about 30 minutes ahead"
-                  : "Turn on rain alerts")
-
-            Button {
-                state.refresh()
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .opacity(state.isRefreshing ? 0.4 : 1)
-            }
-            .buttonStyle(.plain)
-            .disabled(state.isRefreshing)
-            .help("Refresh now")
-
-            Button {
-                NSApplication.shared.terminate(nil)
-            } label: {
-                Image(systemName: "power")
-            }
-            .buttonStyle(.plain)
-            .help("Quit RainNext")
         }
         .foregroundStyle(.secondary)
     }
