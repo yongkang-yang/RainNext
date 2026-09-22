@@ -7,13 +7,18 @@ struct PopoverView: View {
     @State private var isPickingLocation = false
 
     var body: some View {
-        Group {
-            if isPickingLocation {
-                LocationPickerView { isPickingLocation = false }
-            } else {
-                main
+        // The picker lays over the main view rather than replacing it. The
+        // window then keeps one size: it never jumps when the page flips, and
+        // the material never falls short of a window taller than the picker.
+        main
+            .opacity(isPickingLocation ? 0 : 1)
+            .allowsHitTesting(!isPickingLocation)
+            .accessibilityHidden(isPickingLocation)
+            .overlay(alignment: .top) {
+                if isPickingLocation {
+                    LocationPickerView { isPickingLocation = false }
+                }
             }
-        }
         .background(PopoverWindowShape(cornerRadius: Metrics.popoverRadius))
         .onAppear {
             // BD-105: refresh when the popover opens.

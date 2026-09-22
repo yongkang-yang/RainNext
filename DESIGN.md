@@ -46,6 +46,10 @@ the forecast sits on a flat fill. Neighbouring glass controls go inside one
 | `cardPadding` | 12 | Timeline card inset |
 | `chartRadius` | 6 | Chart background and clip |
 | `iconButton` | 28 | Round footer buttons |
+| `searchHeight` | 32 | Search field |
+| `rowHeight` | 28 | Place rows |
+| `rowInset` | 6 | Card edge to row highlight |
+| `rowRadius` | 6 | `cardRadius − rowInset` |
 
 - Corners are **continuous** (`style: .continuous`) everywhere, never circular
   arcs.
@@ -56,10 +60,33 @@ the forecast sits on a flat fill. Neighbouring glass controls go inside one
 - Pills pad 10 horizontally and 4–6 vertically. Everything round is a
   `Capsule` or a `Circle`, not a rectangle with a large radius.
 
-The window corner is set by `PopoverWindowShape`, which rounds and masks the
-layer of the `MenuBarExtra` window's frame view. SwiftUI has no API for this.
-If a future macOS changes that view hierarchy, the popover falls back to the
-stock corner. Check it after every major OS update.
+The window corner is set by `PopoverWindowShape`, and it takes two steps.
+Masking the frame view's layer rounds the material, but the window server
+still casts the shadow from the window's own corner radius, so on a light
+desktop square corners show through. The private `_setCornerRadius:` fixes the
+shadow. It is looked up at runtime: if a future macOS removes it, the content
+stays rounded and only the shadow falls back to the stock shape. Check both on
+a light background after every major OS update.
+
+## Location page
+
+- The picker lies over the main view instead of replacing it, so the window
+  keeps one height. It never jumps when the page flips, and the material always
+  fills the window: a shorter page left bare bands above and below.
+- Header: "Location" on the left, a glass `Done` pill on the right (Esc does the
+  same).
+- Search field is a 32 pt glass capsule.
+- Current location and the saved places share one card, split by 11 pt
+  section labels ("Current location", "Saved") instead of hairline dividers.
+  Search results replace the card's contents and scroll inside it past seven
+  rows.
+- A row is symbol, name, and a checkmark on the place showing. The selected
+  row's symbol and checkmark take the tint and its name goes medium. The only
+  row chrome is a hover fill in `primary` at 7 %, with corners concentric to the
+  card.
+- The saved list is still a `List` so drag-to-reorder keeps working. Its
+  built-in 8 pt side inset ignores `listRowInsets`, so it is cancelled with
+  negative padding (`listInset`).
 
 ## Type
 
