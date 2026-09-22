@@ -10,9 +10,7 @@ Not a weather app. The menu bar shows a glanceable state, the popover shows the
 next two hours — or, on request, the next twelve or forty-eight — and that is
 the whole product.
 
-## Status
-
-v0.1 skeleton — builds, runs, fetches live Buienradar data.
+v0.1 — builds, runs, fetches live Buienradar data. Coverage is the Benelux.
 
 ## Menu bar notation
 
@@ -24,182 +22,24 @@ v0.1 skeleton — builds, runs, fetches live Buienradar data.
 
 Rain comes first, because rain is what this app is for: the nowcast wins
 whenever it has something to say, and the station observation fills the gap it
-leaves. Rain further than 90 minutes out gets no countdown, and drizzle that
-never clears `announceFloor` gets none either — in both cases the sky shows
-instead.
+leaves. Drizzle too light to matter stays on the graph and out of the menu bar —
+a countdown that expires with nothing falling outside is how people stop
+trusting the number.
 
-Conditions come from Buienradar's icon codes, which are single letters `a`–`w`
-for day and the same letters doubled for night. Night is taken from the code
-rather than from sunrise arithmetic, so the app always agrees with the source
-it is quoting.
+## What it does
 
-No temperature in the menu bar. It is available now — see below — but the bar
-is for one question, and a number there competes with the rain countdown for
-the same glance.
-
-## Architecture
-
-```
-Sources/
-├── RainNextKit/        no SwiftUI — testable domain layer
-│   ├── Models/
-│   │   ├── RainReading       one 5-minute sample, raw value → mm/h
-│   │   ├── RainEpisode       a continuous stretch of rain
-│   │   ├── RainForecast      readings + episodes + RainStatus
-│   │   ├── HourlyRainForecast  the long spans, no episodes
-│   │   ├── ForecastSpan      2h / 12h / 48h, and which feed answers
-│   │   ├── RainIntensity     thresholds in one place
-│   │   ├── MenuBarState      the menu bar notation, testable
-│   │   └── WeatherLocation
-│   └── Services/
-│       ├── BuienradarForecastParser   JSON feed → [RainReading]
-│       ├── BuienradarCoverage         where the radar composite has data
-│       ├── RainService       RainDataSource protocol + Buienradar impl
-│       ├── PayloadLogger     keeps wet payloads for threshold calibration
-│       ├── PlaceSearchService  CLGeocoder, filtered to coverage
-│       ├── LocationService   CoreLocation, reduced accuracy
-│       └── LocationStore     remembers the selection
-└── RainNext/           SwiftUI app
-    ├── RainNextApp           MenuBarExtra, .accessory activation policy
-    ├── AppState              refresh cadence + selection
-    └── Views/
-        ├── MenuBarStatusView
-        ├── PopoverView
-        ├── StatusSummaryView
-        ├── RainTimelineView   span picker, graph, NOW marker, hover details
-        └── LocationPickerView
-```
-
-Rain is modelled as **episodes**, not as a list of samples — "rain in 18 min",
-"rain for ~35 min", "stops around 19:40" are all questions about an episode.
-
-## Thresholds
-
-Two floors, on purpose:
-
-| | | |
-| --- | --- | --- |
-| `episodeFloor` | 0.1 mm/h | below this a sample is dry |
-| `announceFloor` | 0.4 mm/h | an episode peaking under this never reaches the menu bar |
-| `moderate` / `heavy` | 0.5 / 2.5 mm/h | intensity labels |
-| `minimumEpisodeDuration` | 10 min | one isolated wet sample is usually radar clutter |
-| `episodeMergeGap` | 15 min | bridges the dry slots inside a train of showers |
-
-`episodeFloor` decides what exists; `announceFloor` decides what interrupts you.
-A countdown that expires with nothing falling outside is how people stop
-trusting the number, so drizzle stays on the graph and out of the menu bar. The
-floor gates *predictions* only — a rate that is falling right now is still shown.
-
-These are estimates. `PayloadLogger` writes every wet response to
-`~/Library/Application Support/RainNext/payloads` (local only, capped at 500
-files) so they can eventually be measured instead.
-
-## Timeline spans
-
-The popover opens on two hours and switches to twelve or forty-eight, which is
-a change of **feed**, not just of zoom:
-
-| Span | Product | Steps | Reach |
-| --- | --- | --- | --- |
-| 2h | `RainHistoryForecast` | 5 min | −30 min → +2 h |
-| 12h / 48h | `Rain24Hour` | 1 hour | next 48 h |
-
-Both live on `graphdata.buienradar.nl/2.0/forecast/geo/`, differ only in the
-product name, and decode identically — one parser covers both.
-
-Two hours is radar: echoes that exist, moved forward. Everything longer is
-model output, which knows about rain that has not formed yet and is wrong in
-different ways. The header names which one is on screen instead of blending
-them, because "rain at 18:00" has not earned the trust "rain in 20 minutes"
-has. For the same reason the long spans skip `RainEpisode` entirely: a
-ten-minute minimum duration and a fifteen-minute merge gap are calibrated for
-five-minute radar and would invent episodes out of hourly numbers rather than
-find them.
-
-**The host answers an unknown product name with the two-hour nowcast, at 200
-rather than with an error.** `Rain12Hour`, `Rain6Hour`, `RainChance` and a dozen
-other plausible names all silently return five-minute radar. Spacing is the only
-thing that tells the two apart, so `HourlyRainForecast.isHourly` checks it and
-the service refuses a payload that fails — otherwise a typo would look like a
-working feature. Measured alongside these: `Rain5Day` (5 days hourly, but
-snapped to a different grid point and missing `original`), `Temp24Hour`,
-`Snow24Hour` and `Sun24Hour`.
-
-The hourly feed is fetched only while a long span is selected, and at most every
-15 minutes — it moves far more slowly than the radar does.
-
-## Conditions
-
-`data.buienradar.nl/2.0/feed/json` is Buienradar's documented free feed: 38 KNMI
-stations, each with coordinates, an icon code, a Dutch description, temperature,
-feels-like, wind speed and direction, gusts, humidity, visibility, air pressure
-and rainfall totals, plus sunrise and sunset. RainNext picks the nearest station
-to the selected place and uses the condition, temperature and wind.
-
-It is a second endpoint, not a replacement: the nowcast answers *when* rain
-starts and stops, this answers *what the sky is doing*. They fail independently
-— losing conditions never surfaces an error over a rain forecast that arrived
-perfectly well.
-
-## Locations
-
-Current location (CoreLocation, reduced accuracy), plus a saved list that is
-searched with `CLGeocoder` — no extra dependency, no API key. The list is
-seeded once with five Dutch cities so the first launch is useful even if
-location permission is denied, and is fully editable after that: drag to
-reorder, context menu to remove, capped at 12.
-
-Buienradar's radar composite covers **lat 49.51–54.80, lon 0.00–10.00** and
-answers 404 outside it, so "no coverage" can never masquerade as "dry". Those
-bounds were measured against the live endpoint rather than documented, and are
-used only to keep obviously-elsewhere search results out of the list; the feed
-itself remains the authority. If CoreLocation puts you outside the box, the app
-keeps the location you had instead of replacing a working forecast with a
-permanent error.
-
-## Rain alerts
-
-Off until switched on with the bell in the popover. One notification per
-shower, fired once rain is within 30 minutes, only for episodes that clear the
-same `announceFloor` the menu bar countdown uses — the app never interrupts you
-about rain it would not even display. Never while it is already raining.
-
-A ledger records the end of the announced episode, not its start, so a forecast
-that drifts by a few minutes between refreshes does not produce a second
-notification about the same shower. It survives relaunch, and resets when you
-switch to a different place.
-
-Quiet hours are the system's job: the notification is `.active`, not
-`.timeSensitive`, so Focus and Do Not Disturb hold it back.
-
-Rain cannot be summoned on demand, so the delivery path has its own hook:
-
-```sh
-open --env RAINNEXT_TEST_ALERT=1 build/RainNext.app   # sends one sample alert
-```
-
-## Refresh
-
-Fetch on launch, every 5 minutes after that, and again when the popover opens
-(if the data is more than 60s old). A failed refresh keeps the last valid
-forecast on screen.
-
-## Icon
-
-`Resources/AppIcon.png` is the master art; `Scripts/make-icon.py` turns it into
-`Resources/AppIcon.icns`, which `bundle.sh` regenerates only when the master is
-newer.
-
-The script rebuilds the art **full-bleed** rather than passing it through. From
-macOS 26 on, the system draws every app icon inside a container shape of its
-own, so art that bakes in its own rounded square renders as a squircle nested
-in a squircle, on a grey plate where the transparent margins were. The script
-lifts the glyph off its background, reproduces the background gradient across
-the whole canvas at 1024, and leaves the corners to the system — which is how
-the icon ends up looking like the ones next to it.
-
-The glyph is a seal-script 雨. At 16pt it is a smudge; that size only appears
-in Finder list views, and the menu bar draws an SF Symbol rather than this.
+- **Two hours of radar** in five-minute steps, as a timeline with a NOW marker
+  and hover details. Twelve and forty-eight hours are available too, from a
+  separate hourly feed — the header names which one is on screen, because "rain
+  at 18:00" has not earned the trust "rain in 20 minutes" has.
+- **Rain alerts**, off until switched on with the bell: one notification per
+  shower, fired once rain is within 30 minutes, never while it is already
+  raining. Focus and Do Not Disturb hold them back.
+- **Locations**: current location (CoreLocation, reduced accuracy) plus a saved
+  list searched with `CLGeocoder` — no API key. Seeded with five Dutch cities so
+  the first launch is useful even if location permission is denied.
+- **Refresh** on launch, every five minutes, and when the popover opens. A
+  failed refresh keeps the last valid forecast on screen.
 
 ## Build
 
@@ -210,75 +50,23 @@ Xcode 27 is required for the SDK, but the project is a SwiftPM package — open
 swift build          # needs DEVELOPER_DIR pointing at Xcode.app if
 swift test           # xcode-select still points at CommandLineTools
 ./Scripts/bundle.sh  # → build/RainNext.app
-
-RAINNEXT_LIVE=1 swift test --filter LiveEndpointTests   # hits the real feed
 ```
 
-The normal suite is offline and deterministic; the live test is opt-in.
-
-`bundle.sh` wraps the SwiftPM binary in an `.app` with an `Info.plist`
-(`LSUIElement`, location and notification usage strings), then signs it with the
-first real identity it finds, falling back to ad-hoc with a warning.
-
-**Notifications need a real signature.** macOS refuses to treat an ad-hoc
-bundle with no Team Identifier as a notification client: the very first
-`notificationSettings()` query returns `.denied` and no permission prompt ever
-appears. A free Apple Development certificate (Xcode → Settings → Accounts) is
-enough — the paid programme is only needed to hand the `.app` to other people.
-
-Two traps found the hard way:
-
-- A certificate can be installed and still be invisible to `security
-  find-identity -v -p codesigning`, which filters out anything whose trust
-  chain does not build. If the only WWDR intermediate in the keychain is the
-  G1 that expired in February 2023, every modern certificate looks absent.
-  Install the matching intermediate from
-  <https://www.apple.com/certificateauthority/>.
-- A bundle identifier that was ever denied stays denied, and an app that never
-  registered does not appear in System Settings → Notifications to be switched
-  back on. The bundle identifier had to be changed once for exactly this
-  reason; preferences live under the identifier, so that reset the saved
-  locations.
-
-An app run from `/tmp` is not accepted as a notification client either,
-whatever its signature. `build/` and `~/Applications` are both fine.
+`bundle.sh` wraps the binary in an `.app` and signs it with the first real
+identity it finds, falling back to ad-hoc with a warning. **Notifications need a
+real signature** — macOS refuses to treat an ad-hoc bundle with no Team
+Identifier as a notification client, and no permission prompt ever appears. A
+free Apple Development certificate is enough.
 
 ## Data
 
-Precipitation nowcast from **Buienradar.nl**, via the public
-`graphdata.buienradar.nl/2.0/forecast/geo/RainHistoryForecast` feed — no token,
-no API key. Each entry carries a UTC timestamp and a rate in mm/h, plus
-Buienradar's raw radar value, which is kept only for threshold calibration.
+Precipitation nowcast from **[Buienradar.nl](https://www.buienradar.nl)**, via
+the public `graphdata.buienradar.nl` feed — no token, no API key. Conditions and
+temperature come from the 38 KNMI stations in `data.buienradar.nl/2.0/feed/json`.
 
-The feed reaches about 15 minutes back and close to three hours forward;
-`ForecastWindow` trims that to 30 minutes of history and a 2-hour horizon.
-Sample spacing is read from the data rather than assumed — real payloads do drop
-slots. Coverage is the Benelux.
-
-Buienradar's terms for the free weather data require attribution in a specific
-form — *"bronvermelding (Buienradar.nl) met hyperlink naar
-https://www.buienradar.nl"* — which is why the popover footer carries the name
-and a working link rather than a plain mention.
-
-The same terms permit the data *"alleen voor niet-commerciële doeleinden"* and
-describe the audience as website or intranet use; *"het gebruik voor mobiele
-toepassingen of commerciële doeleinden vereist toestemming van Buienradar"*. A
-macOS menu bar app is neither a website nor literally a mobile application, so
-whether it needs their permission is unresolved.
-
-Note also that the nowcast endpoint used here is not the one the free-data page
-documents. That page links to `gps.buienradar.nl/getrr.php`, which redirects to
-the plain-text `gadgets.buienradar.nl/data/raintext/`. The JSON feed carries
-real timestamps, mm/h and history, which is why it is used instead, but it is
-undocumented.
+Buienradar's terms for the free weather data require attribution with a
+hyperlink, which the popover footer carries, and permit non-commercial use only.
 
 ## License
 
 [GPL-3.0-or-later](LICENSE). Not distributed commercially.
-
-## Still open
-
-- threshold calibration against real readings
-- Buienradar attribution wording
-- migration to an `.xcodeproj`, the step before distributing to anyone else
-- radar imagery is intentionally excluded from v1
