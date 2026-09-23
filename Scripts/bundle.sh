@@ -7,6 +7,14 @@ CONFIG="${CONFIG:-release}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP="$ROOT/build/RainNext.app"
 
+INSTALL=1
+for arg in "$@"; do
+  case "$arg" in
+    --no-install) INSTALL=0 ;;
+    *) echo "usage: $0 [--no-install]" >&2; exit 2 ;;
+  esac
+done
+
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 
 swift build --package-path "$ROOT" -c "$CONFIG"
@@ -52,3 +60,40 @@ codesign --force --sign "$IDENTITY" --identifier nl.yongkang.rainnext "$APP"
 codesign -dv "$APP" 2>&1 | grep -E "^(Signature|TeamIdentifier)" || true
 
 echo "Built $APP"
+
+# By default the build is installed over /Applications/RainNext.app, the copy
+# that is actually launched: a bundle left only in the repo meant the running
+# app silently stayed older than every fix. --no-install skips it.
+if [ "$INSTALL" = 0 ]; then
+  exit 0
+fi
+
+INSTALL_DIR="/Applications/RainNext.app"
+echo "==> Installing to $INSTALL_DIR"
+
+# Quit a running copy and wait for it to exit before replacing its bundle,
+# then relaunch only if something was running before.
+WAS_RUNNING=0
+if pgrep -xq "RainNext"; then
+  WAS_RUNNING=1
+  osascript -e 'quit app id "nl.yongkang.rainnext"' >/dev/null 2>&1 || true
+  for _ in $(seq 50); do
+    pgrep -xq "RainNext" || break
+    sleep 0.1
+  done
+  if pgrep -xq "RainNext"; then
+    echo "RainNext did not quit; not installing" >&2
+    exit 1
+  fi
+fi
+
+rm -rf "$INSTALL_DIR"
+ditto "$APP" "$INSTALL_DIR"
+echo "    installed $INSTALL_DIR"
+
+if [ "$WAS_RUNNING" = 1 ]; then
+  open "$INSTALL_DIR"
+  echo "    relaunched"
+else
+  echo "  run:  open $INSTALL_DIR"
+fi

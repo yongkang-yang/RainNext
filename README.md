@@ -49,7 +49,7 @@ Xcode 27 is required for the SDK, but the project is a SwiftPM package — open
 ```sh
 swift build          # needs DEVELOPER_DIR pointing at Xcode.app if
 swift test           # xcode-select still points at CommandLineTools
-./Scripts/bundle.sh  # → build/RainNext.app
+./Scripts/bundle.sh  # → build/RainNext.app, installed in /Applications
 ```
 
 `bundle.sh` wraps the binary in an `.app` and signs it with the first real
@@ -57,6 +57,9 @@ identity it finds, falling back to ad-hoc with a warning. **Notifications need a
 real signature** — macOS refuses to treat an ad-hoc bundle with no Team
 Identifier as a notification client, and no permission prompt ever appears. A
 free Apple Development certificate is enough.
+
+It then installs the bundle over `/Applications/RainNext.app`, quitting and
+relaunching RainNext if it was running. Pass `--no-install` to stop at `build/`.
 
 ## Data
 
