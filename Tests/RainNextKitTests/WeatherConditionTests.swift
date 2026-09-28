@@ -120,7 +120,6 @@ final class MenuBarConditionTests: XCTestCase {
     func testDryShowsTheActualSky() {
         let state = MenuBarState.make(from: .dry(next: nil), observation: observation(.snow), at: start)
         XCTAssertEqual(state.symbolName, "cloud.snow", "a sun while it snows is the bug being fixed")
-        XCTAssertNil(state.text)
     }
 
     func testNightSkyUsesTheNightSymbol() {
@@ -132,15 +131,15 @@ final class MenuBarConditionTests: XCTestCase {
         // The station says clear; rain is falling. Rain is what this app is for.
         let raining = RainStatus.raining(episode: episode(in: 0, mmh: 1.1), intensity: 1.1)
         let state = MenuBarState.make(from: raining, observation: observation(.clear), at: start)
-        XCTAssertEqual(state.text, "1.1")
-        XCTAssertNotEqual(state.symbolName, "sun.max")
+        XCTAssertEqual(state.symbolName, "cloud.rain.fill")
     }
 
     func testCountdownOutranksTheStation() {
         let state = MenuBarState.make(
             from: .dry(next: episode(in: 20, mmh: 1.1)), observation: observation(.clear), at: start
         )
-        XCTAssertEqual(state.text, "20m")
+        XCTAssertEqual(state.symbolName, "cloud.rain")
+        XCTAssertEqual(state.accessibilityLabel, "RainNext: rain in 20 minutes")
     }
 
     func testStationCarriesTheGapWhenTheNowcastIsMissing() {

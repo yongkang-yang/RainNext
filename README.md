@@ -14,17 +14,15 @@ v0.1 — builds, runs, fetches live Buienradar data. Coverage is the Benelux.
 
 ## Menu bar notation
 
-```
-☂ 0.8       raining now at ~0.8 mm/h
-☂ 27m       rain starts in 27 minutes
-🌙 / ☁ / ❄   otherwise, the sky as the nearest station reports it
-```
+The menu bar shows only a weather icon: an outlined rain cloud for upcoming
+rain, a filled rain cloud when it is raining, or the sky reported by the nearest
+station otherwise. There are no numbers beside the icon; rain timing and rate
+are available in the popover and the icon's accessibility label.
 
 Rain comes first, because rain is what this app is for: the nowcast wins
 whenever it has something to say, and the station observation fills the gap it
 leaves. Drizzle too light to matter stays on the graph and out of the menu bar —
-a countdown that expires with nothing falling outside is how people stop
-trusting the number.
+promising rain that never arrives is how people stop trusting the forecast.
 
 ## What it does
 

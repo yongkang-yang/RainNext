@@ -176,37 +176,38 @@ final class MenuBarStateTests: XCTestCase {
         )
     }
 
-    func testDryShowsNoText() {
+    func testDryShowsSun() {
         let state = MenuBarState.make(from: .dry(next: nil), at: start)
-        XCTAssertNil(state.text)
         XCTAssertEqual(state.symbolName, "sun.max")
     }
 
     func testCountdownForUpcomingRain() {
         let state = MenuBarState.make(from: .dry(next: episode(in: 27, mmh: 1.1)), at: start)
-        XCTAssertEqual(state.text, "27m")
+        XCTAssertEqual(state.symbolName, "cloud.rain")
+        XCTAssertEqual(state.accessibilityLabel, "RainNext: rain in 27 minutes")
     }
 
     func testDrizzleGetsNoCountdown() {
         // Real rain, but not worth a promise the sky may not keep.
         let state = MenuBarState.make(from: .dry(next: episode(in: 27, mmh: 0.25)), at: start)
-        XCTAssertNil(state.text)
         XCTAssertEqual(state.symbolName, "sun.max")
     }
 
-    func testDistantRainIsNotCountedDown() {
-        let minutes = MenuBarState.countdownHorizon / 60 + 10
-        XCTAssertNil(MenuBarState.make(from: .dry(next: episode(in: minutes, mmh: 1.1)), at: start).text)
+    func testDistantRainIsNotShown() {
+        let minutes = MenuBarState.upcomingRainHorizon / 60 + 10
+        XCTAssertEqual(MenuBarState.make(from: .dry(next: episode(in: minutes, mmh: 1.1)), at: start).symbolName, "sun.max")
     }
 
     func testRateWhenRaining() {
         let now = episode(in: 0, mmh: 1.1)
-        XCTAssertEqual(MenuBarState.make(from: .raining(episode: now, intensity: 0.84), at: start).text, "0.8")
+        let state = MenuBarState.make(from: .raining(episode: now, intensity: 0.84), at: start)
+        XCTAssertEqual(state.symbolName, "cloud.rain.fill")
+        XCTAssertTrue(state.accessibilityLabel.contains("raining"))
     }
 
     func testCurrentDrizzleIsStillShown() {
         // The announce floor gates forecasts, not what is happening right now.
         let now = episode(in: 0, mmh: 0.25)
-        XCTAssertEqual(MenuBarState.make(from: .raining(episode: now, intensity: 0.25), at: start).text, "0.2")
+        XCTAssertEqual(MenuBarState.make(from: .raining(episode: now, intensity: 0.25), at: start).symbolName, "cloud.rain.fill")
     }
 }

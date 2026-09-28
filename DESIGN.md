@@ -141,12 +141,11 @@ to 100 %.
 
 ## Menu bar item
 
-- One SF Symbol, sometimes followed by short text: `27m` (countdown) or `0.8`
-  (mm/h). Wording is defined in `MenuBarState`, not in the view.
+- One SF Symbol only, with no countdown or rain-rate text. Upcoming rain uses
+  an outlined rain cloud; current rain uses a filled one.
 - The symbol is a **16 pt medium** template `NSImage`. The menu bar ignores
   SwiftUI font modifiers on a label's image, so the size has to be set on the
   image itself. It stays a template image, so it follows the menu bar's colour.
-- Text is 13 pt medium, monospaced digits.
 - Every state has an `accessibilityLabel` in plain words ("rain in 27 minutes").
 
 ## Icons

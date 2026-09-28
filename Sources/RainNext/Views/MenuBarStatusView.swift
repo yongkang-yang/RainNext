@@ -3,19 +3,13 @@ import AppKit
 import RainNextKit
 import SwiftUI
 
-/// The menu bar item itself: a symbol, optionally followed by a countdown or a rate.
+/// The menu bar item itself: a weather symbol only.
 struct MenuBarStatusView: View {
     let state: MenuBarState
 
     var body: some View {
-        HStack(spacing: 3) {
-            symbol
-            if let text = state.text {
-                Text(text)
-                    .font(.system(size: 13, weight: .medium).monospacedDigit())
-            }
-        }
-        .accessibilityLabel(state.accessibilityLabel)
+        symbol
+            .accessibilityLabel(state.accessibilityLabel)
     }
 
     /// The menu bar ignores SwiftUI font modifiers on a label's image and
