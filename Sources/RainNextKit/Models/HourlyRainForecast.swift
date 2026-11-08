@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 import Foundation
 
 /// Buienradar's hourly rain forecast, which reaches two days out.
