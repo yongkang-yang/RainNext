@@ -70,4 +70,4 @@ hyperlink, which the popover footer carries, and permit non-commercial use only.
 
 ## License
 
-[GPL-3.0-or-later](LICENSE). Not distributed commercially.
+[MIT](LICENSE). Not distributed commercially.
